@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>One Roof — Kurulum Kılavuzu</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- AOS — Animate on Scroll -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+          colors: {
+            brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    html { scroll-behavior: smooth; }
+
+    /* Screenshot placeholder */
+    .ss-box {
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      border-radius: 14px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      text-align: center;
+      padding: 28px 20px;
+      margin: 20px 0;
+      position: relative;
+    }
+    .ss-box .ss-label {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .ss-box .ss-icon { font-size: 36px; margin-bottom: 10px; }
+    .ss-box .ss-title { font-size: 13px; font-weight: 600; color: #64748b; }
+    .ss-box .ss-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; max-width: 320px; }
+
+    /* Code snippet */
+    .code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'Fira Mono', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .code-block .kw { color: #818cf8; }
+    .code-block .fn { color: #34d399; }
+
+    /* Sidebar active state */
+    .nav-item.active { background: #312e81; color: #a5b4fc; }
+    .nav-item.done { color: #34d399; }
+    .nav-item.done .num-badge { background: #065f46; color: #34d399; }
+
+    /* Step number circle */
+    .step-num {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Scrollbar */
+    aside::-webkit-scrollbar { width: 4px; }
+    aside::-webkit-scrollbar-track { background: #1e293b; }
+    aside::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+  </style>
+</head>
+
+<body class="bg-slate-50 font-sans antialiased" x-data="guide()" x-cloak>
+
+  <!-- ── Mobile Progress Bar ── -->
+  <div class="fixed top-0 left-0 right-0 z-50 h-1 bg-slate-200 md:hidden">
+    <div class="h-full bg-indigo-500 transition-all duration-700"
+         :style="`width: ${progress}%`"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SIDEBAR
+  ══════════════════════════════════════════ -->
+  <aside class="hidden md:flex fixed left-0 top-0 h-screen w-60 bg-slate-900 flex-col z-40 border-r border-slate-800">
+
+    <!-- Brand -->
+    <div class="px-5 py-5 border-b border-slate-800">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-sm">OR</div>
+        <div>
+          <div class="text-white font-bold text-sm leading-none">One Roof</div>
+          <div class="text-slate-500 text-xs mt-0.5">Kurulum Kılavuzu</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="px-5 py-4 border-b border-slate-800">
+      <div class="flex justify-between text-xs mb-2">
+        <span class="text-slate-500">İlerleme</span>
+        <span class="text-indigo-400 font-semibold" x-text="`${completedSteps} / ${totalSteps}`"></span>
+      </div>
+      <div class="w-full bg-slate-700 rounded-full h-1.5">
+        <div class="bg-indigo-500 h-1.5 rounded-full transition-all duration-700"
+             :style="`width: ${progress}%`"></div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 overflow-y-auto py-3 px-3">
+      <template x-for="(step, i) in steps" :key="i">
+        <a :href="`#step-${i+1}`"
+           class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-lg mb-0.5 transition-all cursor-pointer group"
+           :class="checkedSteps[i] ? 'done' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'">
+          <div class="num-badge w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+               :class="checkedSteps[i] ? 'bg-emerald-900 text-emerald-400' : 'bg-slate-700 text-slate-500'">
+            <span x-show="!checkedSteps[i]" x-text="i+1"></span>
+            <span x-show="checkedSteps[i]" class="text-xs">✓</span>
+          </div>
+          <span class="text-xs leading-tight" x-text="step.nav"></span>
+        </a>
+      </template>
+    </nav>
+
+    <!-- Footer -->
+    <div class="px-5 py-4 border-t border-slate-800">
+      <div class="text-slate-600 text-xs">Tahmini süre: <span class="text-slate-400">10–15 dk</span></div>
+    </div>
+  </aside>
+
+  <!-- ══════════════════════════════════════════
+       MAIN CONTENT
+  ══════════════════════════════════════════ -->
+  <main class="md:ml-60">
+
+    <!-- ── Hero ── -->
+    <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white">
+      <div class="max-w-2xl mx-auto px-6 py-16 md:py-20">
+        <div class="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 uppercase tracking-wider">
+          <span>📋</span> Adım Adım Kurulum
+        </div>
+        <h1 class="text-4xl md:text-5xl font-black mb-4 leading-tight">
+          One Roof<br>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+            Kurulum Kılavuzu
+          </span>
+        </h1>
+        <p class="text-slate-300 text-base leading-relaxed max-w-lg mb-8">
+          Bu rehberi adım adım takip ederek Google Sheets şablonunu içe aktaracak, script'i kuracak ve
+          sistemi kullanıma hazır hale getireceksin.
+        </p>
+
+        <!-- Stats -->
+        <div class="flex flex-wrap gap-4 mb-8">
+          <div class="bg-white/10 rounded-xl px-4 py-3 text-center min-w-[90px]">
+            <div class="text-2xl font-black text-white" x-text="totalSteps"></div>
+            <div class="text-slate-400 text-xs">Adım</div>
+          </div>
+          <div class="bg-white/10 rounded-xl px-4 py-3 text-center min-w-[90px]">
+            <div class="text-2xl font-black text-white">~12</div>
+            <div class="text-slate-400 text-xs">Dakika</div>
+          </div>
+          <div class="bg-emerald-500/20 rounded-xl px-4 py-3 text-center min-w-[90px]"
+               x-show="completedSteps > 0">
+            <div class="text-2xl font-black text-emerald-400" x-text="completedSteps"></div>
+            <div class="text-slate-400 text-xs">Tamamlandı</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+          <a href="#step-1"
+             class="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
+            Kuruluma Başla →
+          </a>
+          <a href="#sorun-giderme"
+             class="bg-white/10 hover:bg-white/20 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
+            Sorun mu var?
+          </a>
+        </div>
+
+        <!-- ── Download Cards ── -->
+        <div class="mt-8 pt-8 border-t border-white/10">
+          <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">📦 Kurulum Dosyalarını İndir</div>
+          <div class="flex flex-wrap gap-3">
+
+            <!-- Excel download -->
+            <a href="oneroof_template.xlsx"
+               download
+               class="group flex items-center gap-3 bg-white/10 hover:bg-emerald-500/30 border border-white/20 hover:border-emerald-400/60 rounded-xl px-4 py-3 transition-all">
+              <div class="w-9 h-9 rounded-lg bg-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0 group-hover:bg-emerald-500/50 transition-colors">
+                📊
+              </div>
+              <div>
+                <div class="text-white text-sm font-semibold leading-none">Şablon Dosyası</div>
+                <div class="text-slate-400 text-xs mt-1 font-mono">oneroof_template.xlsx</div>
+              </div>
+              <div class="ml-2 text-slate-500 group-hover:text-emerald-400 transition-colors text-lg">↓</div>
+            </a>
+
+            <!-- Script download -->
+            <a href="oneroof_script.txt"
+               download
+               class="group flex items-center gap-3 bg-white/10 hover:bg-indigo-500/30 border border-white/20 hover:border-indigo-400/60 rounded-xl px-4 py-3 transition-all">
+              <div class="w-9 h-9 rounded-lg bg-indigo-500/30 flex items-center justify-center text-lg flex-shrink-0 group-hover:bg-indigo-500/50 transition-colors">
+                📜
+              </div>
+              <div>
+                <div class="text-white text-sm font-semibold leading-none">Script Dosyası</div>
+                <div class="text-slate-400 text-xs mt-1 font-mono">oneroof_script.txt</div>
+              </div>
+              <div class="ml-2 text-slate-500 group-hover:text-indigo-400 transition-colors text-lg">↓</div>
+            </a>
+
+          </div>
+          <p class="text-slate-600 text-xs mt-3">
+            İndirme çalışmıyorsa sayfanın paylaşıldığı kaynaktan dosyaları al.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Steps ── -->
+    <div class="max-w-2xl mx-auto px-4 md:px-6 py-10 space-y-6">
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 1: GEREKSİNİMLER
+      ───────────────────────────────────── -->
+      <div id="step-1" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-indigo-100 text-indigo-600">1</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Başlamadan Önce</div>
+            <h2 class="text-xl font-bold text-slate-900">Gereksinimler</h2>
+          </div>
+          <button @click="toggle(0)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[0]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[0] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-slate-600 text-sm leading-relaxed">
+            Kuruluma başlamadan önce aşağıdakilere sahip olduğundan emin ol:
+          </p>
+          <div class="space-y-3">
+            <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+              <span class="text-xl mt-0.5">🔑</span>
+              <div>
+                <div class="font-semibold text-slate-800 text-sm">Google Hesabı</div>
+                <div class="text-slate-500 text-xs mt-0.5">Kurulumu yapacağın Google hesabına erişimin olmalı.</div>
+              </div>
+            </div>
+            <a href="oneroof_template.xlsx" download
+               class="flex items-center gap-3 p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors group">
+              <span class="text-xl mt-0.5">📊</span>
+              <div class="flex-1">
+                <div class="font-semibold text-slate-800 text-sm">Şablon Dosyası → <code class="bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-700 text-xs">oneroof_template.xlsx</code></div>
+                <div class="text-slate-500 text-xs mt-0.5">Google Sheets'e aktaracağın Excel şablonu.</div>
+              </div>
+              <span class="text-emerald-500 text-base font-bold group-hover:scale-110 transition-transform">↓ İndir</span>
+            </a>
+            <a href="oneroof_script.txt" download
+               class="flex items-center gap-3 p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors group">
+              <span class="text-xl mt-0.5">📜</span>
+              <div class="flex-1">
+                <div class="font-semibold text-slate-800 text-sm">Script Dosyası → <code class="bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs">oneroof_script.txt</code></div>
+                <div class="text-slate-500 text-xs mt-0.5">Apps Script editörüne yapıştıracağın kod.</div>
+              </div>
+              <span class="text-indigo-500 text-base font-bold group-hover:scale-110 transition-transform">↓ İndir</span>
+            </a>
+            <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+              <span class="text-xl mt-0.5">🌐</span>
+              <div>
+                <div class="font-semibold text-slate-800 text-sm">Chrome veya Edge Tarayıcı</div>
+                <div class="text-slate-500 text-xs mt-0.5">Google Workspace ile en iyi uyum bu tarayıcılarda sağlanır.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 2: DOSYAYI İÇE AKTAR
+      ───────────────────────────────────── -->
+      <div id="step-2" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-violet-100 text-violet-600">2</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Dosya İşlemi</div>
+            <h2 class="text-xl font-bold text-slate-900">Excel Dosyasını İçe Aktar</h2>
+          </div>
+          <button @click="toggle(1)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[1]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[1] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-slate-600 text-sm leading-relaxed">
+            <a href="https://sheets.google.com" target="_blank" class="text-indigo-600 underline font-medium">sheets.google.com</a> adresini
+            aç ve yeni bir boş spreadsheet oluştur. Ardından aşağıdaki adımları takip et:
+          </p>
+
+          <!-- Steps list -->
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">
+                Üst menüden <strong>Dosya</strong> → <strong>İçe Aktar</strong>'a tıkla.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700">
+                Açılan pencerede <strong>Yükle</strong> sekmesine geç ve
+                <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs">oneroof_template.xlsx</code>
+                dosyasını sürükle-bırak ya da seç.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">
+                İçe aktarma konumu olarak <strong>"Elektronik tabloyu değiştir"</strong> seç.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
+              <div class="text-sm text-slate-700">
+                <strong>"Verileri İçe Aktar"</strong> butonuna tıkla. Sayfa yenilenir.
+              </div>
+            </li>
+          </ol>
+
+          <!-- Screenshots -->
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 1</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">Dosya → İçe Aktar Menüsü</div>
+            <div class="ss-sub">Üst menüde "Dosya" seçili, açılır menüde "İçe Aktar" seçeneği görünür.</div>
+          </div>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 2</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">İçe Aktarma Diyalogu</div>
+            <div class="ss-sub">"Elektronik tabloyu değiştir" seçeneği işaretli. "Verileri İçe Aktar" butonu görünür.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 3: BÖLGE AYARI
+      ───────────────────────────────────── -->
+      <div id="step-3" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-amber-100 text-amber-600">3</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1">Kritik Ayar</div>
+            <h2 class="text-xl font-bold text-slate-900">Bölge Ayarını ABD Yap</h2>
+          </div>
+          <button @click="toggle(2)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[2]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[2] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+
+          <!-- Warning -->
+          <div class="flex gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">⚠️</span>
+            <div>
+              <div class="font-semibold text-red-800 text-sm">Bu adımı atlama!</div>
+              <div class="text-red-700 text-xs mt-1 leading-relaxed">
+                Bölge ayarı yanlış olursa formüllerde <strong>#REF!</strong> ve <strong>#DEĞER!</strong> hataları oluşur,
+                script çalışmaz. Bölgeyi mutlaka <strong>Amerika Birleşik Devletleri</strong> yapmalısın.
+              </div>
+            </div>
+          </div>
+
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">Üst menüden <strong>Dosya</strong> → <strong>Ayarlar</strong>'a tıkla.</div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700"><strong>Genel</strong> sekmesinde <strong>Yerel Ayar</strong> dropdown'ını bul.</div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">Listeden <strong>Amerika Birleşik Devletleri</strong>'ni seç.</div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
+              <div class="text-sm text-slate-700"><strong>"Ayarları Kaydet ve Yeniden Yükle"</strong>'ye tıkla. Sayfa yenilenir.</div>
+            </li>
+          </ol>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 3</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">Dosya → Ayarlar → Yerel Ayar</div>
+            <div class="ss-sub">Ayarlar diyalogunda "Yerel Ayar: Amerika Birleşik Devletleri" seçili.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 4: REF HATALARI
+      ───────────────────────────────────── -->
+      <div id="step-4" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-sky-100 text-sky-600">4</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-sky-500 uppercase tracking-wider mb-1">Bilgi</div>
+            <h2 class="text-xl font-bold text-slate-900">#REF! Hataları Görüyorum, Sorun mu?</h2>
+          </div>
+          <button @click="toggle(3)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[3]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[3] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">ℹ️</span>
+            <div>
+              <div class="font-semibold text-sky-800 text-sm">Endişelenme — bu tamamen normal!</div>
+              <div class="text-sky-700 text-xs mt-1 leading-relaxed">
+                Spreadsheet'i ilk açtığında bazı hücrelerde <strong>#REF!</strong> veya <strong>#DEĞER!</strong> hatası görebilirsin.
+                Bu hatalar, SET sayfasındaki yapılandırma hücreleri henüz dolu olmadığı için oluşur.
+                Script kurulumu tamamlandıktan sonra otomatik olarak düzelecektir.
+              </div>
+            </div>
+          </div>
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 4</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">İlk Açılış — #REF! Hataları</div>
+            <div class="ss-sub">Bazı hücrelerde kırmızı #REF! hatası görünüyor. Bu kurulum öncesi beklenen bir durumdur.</div>
+          </div>
+          <p class="text-slate-600 text-sm">
+            Şimdilik bu hataları görmezden gel ve bir sonraki adıma geç.
+          </p>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 5: APPS SCRIPT EDITÖR
+      ───────────────────────────────────── -->
+      <div id="step-5" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-indigo-100 text-indigo-600">5</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Script Editörü</div>
+            <h2 class="text-xl font-bold text-slate-900">Apps Script Editörünü Aç</h2>
+          </div>
+          <button @click="toggle(4)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[4]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[4] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">
+                Üst menüden <strong>Uzantılar</strong>'a tıkla.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700">
+                Açılan menüden <strong>Apps Komut Dosyası</strong>'na tıkla.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">
+                Yeni bir sekme açılır. Script editörü göreceksin — içinde varsayılan bir <code class="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 text-xs">Code.gs</code> dosyası bulunur.
+              </div>
+            </li>
+          </ol>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 5</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">Uzantılar → Apps Komut Dosyası</div>
+            <div class="ss-sub">Üst menüde "Uzantılar" açık, "Apps Komut Dosyası" seçeneği görünüyor.</div>
+          </div>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 6</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">Apps Script Editörü</div>
+            <div class="ss-sub">Yeni sekmede script editörü açık. Sol panelde "Code.gs" dosyası görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 6: KODU YAPISTIR
+      ───────────────────────────────────── -->
+      <div id="step-6" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-violet-100 text-violet-600">6</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Kod Kurulumu</div>
+            <h2 class="text-xl font-bold text-slate-900">Script Kodunu Yapıştır</h2>
+          </div>
+          <button @click="toggle(5)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[5]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[5] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">
+                Editördeki mevcut kodu <strong>tümünü seç</strong> (<kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl + A</kbd>) ve <strong>sil</strong>.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700">
+                <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs">oneroof_script.txt</code> dosyasını bir metin editöründe aç.
+                İçeriğin <strong>tamamını</strong> kopyala (<kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl + A</kbd>,
+                <kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl + C</kbd>).
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">
+                Script editörüne geri dön ve yapıştır (<kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl + V</kbd>).
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
+              <div class="text-sm text-slate-700">
+                Kaydet: Toolbar'daki <strong>💾 disket simgesine</strong> tıkla ya da
+                <kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl + S</kbd> bas.
+              </div>
+            </li>
+          </ol>
+
+          <!-- Tip -->
+          <div class="flex gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">💡</span>
+            <div>
+              <div class="font-semibold text-emerald-800 text-sm">İpucu: Proje Adı</div>
+              <div class="text-emerald-700 text-xs mt-1 leading-relaxed">
+                Sol üstteki "Apps Komut Dosyası" yazısına tıklayarak projeye istediğin bir isim verebilirsin
+                (örn: <em>OneRoof Sync</em>). Bu isim, izin diyalogunda görünecek.
+              </div>
+            </div>
+          </div>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 7</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">Kod Yapıştırıldıktan Sonra Editör</div>
+            <div class="ss-sub">Editör script koduyla dolu. Sol üstte kaydet butonu ve proje adı görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 7: SET SAYFASI YAPILANDIRMA
+      ───────────────────────────────────── -->
+      <div id="step-7" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-teal-100 text-teal-600">7</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-teal-500 uppercase tracking-wider mb-1">Yapılandırma</div>
+            <h2 class="text-xl font-bold text-slate-900">SET Sayfasını Doldur</h2>
+          </div>
+          <button @click="toggle(6)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[6]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[6] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-5">
+          <p class="text-slate-600 text-sm leading-relaxed">
+            Google Sheets'e geri dön ve <strong>SET</strong> sayfasını aç.
+            Aşağıdaki hücreleri kendi bilgilerinle doldur:
+          </p>
+
+          <!-- Config cells table -->
+          <div class="overflow-hidden rounded-xl border border-slate-200">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200">
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Hücre</th>
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Ne Girilecek</th>
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Örnek</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3 font-mono text-indigo-600 font-semibold text-xs">[İSİM HÜCRESİ]</td>
+                  <td class="px-4 py-3 text-slate-700 text-xs">Kullanıcı adın / görünen ismin</td>
+                  <td class="px-4 py-3 text-slate-400 text-xs font-mono">Ahmet K.</td>
+                </tr>
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3 font-mono text-indigo-600 font-semibold text-xs">[KAYNAK SHEET ID]</td>
+                  <td class="px-4 py-3 text-slate-700 text-xs">Kaynak veri spreadsheet'inin ID'si</td>
+                  <td class="px-4 py-3 text-slate-400 text-xs font-mono">1BxiMVs0…</td>
+                </tr>
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3 font-mono text-indigo-600 font-semibold text-xs">[FİYAT SHEET ID]</td>
+                  <td class="px-4 py-3 text-slate-700 text-xs">Fiyat tablosu spreadsheet'inin ID'si</td>
+                  <td class="px-4 py-3 text-slate-400 text-xs font-mono">1CyiNWt1…</td>
+                </tr>
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3 font-mono text-indigo-600 font-semibold text-xs">B50</td>
+                  <td class="px-4 py-3 text-slate-700 text-xs">Kullanıcı kategorin (1–9 arası)</td>
+                  <td class="px-4 py-3 text-slate-400 text-xs font-mono">3</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Where to find Sheet ID tip -->
+          <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">🔗</span>
+            <div>
+              <div class="font-semibold text-sky-800 text-sm">Spreadsheet ID nasıl bulunur?</div>
+              <div class="text-sky-700 text-xs mt-1 leading-relaxed">
+                Kaynak spreadsheet'i aç. Tarayıcı adres çubuğuna bak:
+                <code class="block bg-sky-100 rounded px-2 py-1 mt-1.5 text-sky-800 text-xs break-all">
+                  https://docs.google.com/spreadsheets/d/<strong>BURASI_ID</strong>/edit#gid=0
+                </strong></code>
+                <span class="text-sky-600">İki <code>/</code> arasındaki uzun alfanümerik kısmı kopyala.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 8</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">SET Sayfası — Doldurulmuş Hücreler</div>
+            <div class="ss-sub">SET sayfasında isim, Sheet ID ve kategori hücreleri dolu halde görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 8: setupSyncAllTrigger
+      ───────────────────────────────────── -->
+      <div id="step-8" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-indigo-100 text-indigo-600">8</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">İlk Çalıştırma</div>
+            <h2 class="text-xl font-bold text-slate-900">setupSyncAllTrigger'ı Çalıştır</h2>
+          </div>
+          <button @click="toggle(7)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[7]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[7] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-slate-600 text-sm leading-relaxed">
+            Script editörüne geri dön. Bu adımda otomatik 5-dakika trigger'ını kuracağız.
+          </p>
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">
+                Toolbar'daki fonksiyon seçici dropdown'ından
+                <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs font-mono">setupSyncAllTrigger</code>
+                seç.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700">
+                <strong>▶ Çalıştır</strong> butonuna tıkla.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">
+                Hemen <strong>"Yetkilendirme gerekli"</strong> diyalogu açılacak → Bir sonraki adıma geç.
+              </div>
+            </li>
+          </ol>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 9</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">setupSyncAllTrigger Seçili, Çalıştır Butonu</div>
+            <div class="ss-sub">Dropdown'da "setupSyncAllTrigger" seçili, yanında mavi ▶ Çalıştır butonu görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 9: İZİNLER
+      ───────────────────────────────────── -->
+      <div id="step-9" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-red-100 text-red-600">9</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-red-500 uppercase tracking-wider mb-1">Google İzin Akışı</div>
+            <h2 class="text-xl font-bold text-slate-900">Google İzin Uyarılarını Geç</h2>
+          </div>
+          <button @click="toggle(8)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[8]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[8] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-5">
+          <div class="flex gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">🛡️</span>
+            <div>
+              <div class="font-semibold text-amber-800 text-sm">Bu Google'ın güvenlik uyarısıdır — script'in kendisi güvenli.</div>
+              <div class="text-amber-700 text-xs mt-1 leading-relaxed">
+                Google, yayıncı tarafından onaylanmamış script'lerde standart bir uyarı gösterir.
+                Bu, sana paylaşılan kişisel bir script olduğu için bu uyarı normal.
+                Aşağıdaki adımları takip ederek geçebilirsin.
+              </div>
+            </div>
+          </div>
+
+          <!-- Permission steps -->
+          <div class="space-y-4">
+
+            <!-- Sub-step A -->
+            <div class="border border-slate-200 rounded-xl overflow-hidden">
+              <div class="flex items-center gap-2 bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+                <div class="w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">A</div>
+                <span class="text-sm font-semibold text-slate-700">İzinleri İncele</span>
+              </div>
+              <div class="p-4">
+                <p class="text-sm text-slate-600">"Yetkilendirme gerekli" diyalogunda <strong>"İzinleri İncele"</strong> butonuna tıkla. Google hesabı seçim ekranı açılır.</p>
+                <div class="ss-box" style="min-height:140px">
+                  <div class="ss-label">Ekran Görüntüsü 10</div>
+                  <div class="ss-icon">📸</div>
+                  <div class="ss-title">"İzinleri İncele" Diyalogu</div>
+                  <div class="ss-sub">"Yetkilendirme gerekli" yazısı ve "İzinleri İncele" butonu görünüyor.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-step B -->
+            <div class="border border-slate-200 rounded-xl overflow-hidden">
+              <div class="flex items-center gap-2 bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+                <div class="w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">B</div>
+                <span class="text-sm font-semibold text-slate-700">Hesabını Seç</span>
+              </div>
+              <div class="p-4">
+                <p class="text-sm text-slate-600">Google hesap seçim ekranında kendi hesabını seç veya tıkla.</p>
+                <div class="ss-box" style="min-height:140px">
+                  <div class="ss-label">Ekran Görüntüsü 11</div>
+                  <div class="ss-icon">📸</div>
+                  <div class="ss-title">Google Hesap Seçimi</div>
+                  <div class="ss-sub">Hesap listesi görünüyor. Kurulum yapacağın Google hesabı seçili.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-step C — critical -->
+            <div class="border-2 border-red-300 rounded-xl overflow-hidden">
+              <div class="flex items-center gap-2 bg-red-50 px-4 py-2.5 border-b border-red-200">
+                <div class="w-5 h-5 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center">C</div>
+                <span class="text-sm font-semibold text-red-700">⚠️ "Bu uygulama doğrulanmamış" Uyarısı</span>
+              </div>
+              <div class="p-4 space-y-3">
+                <p class="text-sm text-slate-600">
+                  Kırmızı uyarı ekranı açılır. Bu beklenen bir durum.
+                  <strong>Bu ekranda herhangi bir "Geri" veya "Güvenli" butona basmadan</strong> şunu yap:
+                </p>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                  Sayfanın <strong>en altına kadar</strong> in ve küçük <strong>"Gelişmiş"</strong> linkine tıkla.
+                </div>
+                <div class="ss-box" style="min-height:140px">
+                  <div class="ss-label">Ekran Görüntüsü 12</div>
+                  <div class="ss-icon">📸</div>
+                  <div class="ss-title">"Bu uygulama doğrulanmamış" — Kırmızı Uyarı</div>
+                  <div class="ss-sub">Kırmızı uyarı sayfası. En altta küçük "Gelişmiş" linki görünüyor.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-step D -->
+            <div class="border-2 border-orange-300 rounded-xl overflow-hidden">
+              <div class="flex items-center gap-2 bg-orange-50 px-4 py-2.5 border-b border-orange-200">
+                <div class="w-5 h-5 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center">D</div>
+                <span class="text-sm font-semibold text-orange-700">"[Proje Adı]'na git (güvensiz)"</span>
+              </div>
+              <div class="p-4 space-y-3">
+                <p class="text-sm text-slate-600">
+                  "Gelişmiş"e tıklayınca yeni bir link belirir:
+                </p>
+                <div class="code-block text-center">
+                  <span class="text-slate-400">"</span><span class="fn">[Proje Adın]</span><span class="text-slate-400">'na git (güvensiz)"</span>
+                </div>
+                <p class="text-sm text-slate-600">Bu linke tıkla. İzin listesi ekranına geçilir.</p>
+                <div class="ss-box" style="min-height:140px">
+                  <div class="ss-label">Ekran Görüntüsü 13</div>
+                  <div class="ss-icon">📸</div>
+                  <div class="ss-title">"Gelişmiş" Genişledi</div>
+                  <div class="ss-sub">"[Proje adı]'na git (güvensiz)" linki görünüyor, altı çizili mavi link.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-step E -->
+            <div class="border border-emerald-300 rounded-xl overflow-hidden">
+              <div class="flex items-center gap-2 bg-emerald-50 px-4 py-2.5 border-b border-emerald-200">
+                <div class="w-5 h-5 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">E</div>
+                <span class="text-sm font-semibold text-emerald-700">İzin Ver</span>
+              </div>
+              <div class="p-4 space-y-3">
+                <p class="text-sm text-slate-600">
+                  Script'in hangi izinlere ihtiyaç duyduğunu listeleyen ekran açılır.
+                  Sayfanın altındaki <strong>"İzin Ver"</strong> (Allow) butonuna tıkla.
+                </p>
+                <div class="flex gap-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <span class="flex-shrink-0">✅</span>
+                  <div class="text-xs text-emerald-700">
+                    <strong>Gerekli izinler:</strong> Google E-Tablolar okuma/yazma, trigger oluşturma ve script çalıştırma izinleri.
+                    Bunlar script'in çalışması için zorunludur.
+                  </div>
+                </div>
+                <div class="ss-box" style="min-height:140px">
+                  <div class="ss-label">Ekran Görüntüsü 14</div>
+                  <div class="ss-icon">📸</div>
+                  <div class="ss-title">İzin Listesi Ekranı — "İzin Ver" Butonu</div>
+                  <div class="ss-sub">Script'in istediği izinler listeleniyor. En altta mavi "İzin Ver" butonu görünüyor.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 10: syncAll
+      ───────────────────────────────────── -->
+      <div id="step-10" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-indigo-100 text-indigo-600">10</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">İlk Senkronizasyon</div>
+            <h2 class="text-xl font-bold text-slate-900">syncAll'ı Çalıştır</h2>
+          </div>
+          <button @click="toggle(9)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[9]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[9] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-slate-600 text-sm leading-relaxed">
+            <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs">setupSyncAllTrigger</code> başarıyla tamamlandı.
+            Şimdi ilk senkronizasyonu elle başlatacağız.
+          </p>
+          <ol class="space-y-3">
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+              <div class="text-sm text-slate-700">
+                Fonksiyon dropdown'ından
+                <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 text-xs font-mono">syncAll</code>
+                seç.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+              <div class="text-sm text-slate-700">
+                <strong>▶ Çalıştır</strong>'a tıkla. Editörün altında "Yürütme günlüğü" açılır.
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+              <div class="text-sm text-slate-700">
+                İşlem bittikten sonra günlükte <strong>"syncAll COMPLETE"</strong> mesajını göreceksin.
+              </div>
+            </li>
+          </ol>
+
+          <div class="flex gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">⏱️</span>
+            <div>
+              <div class="font-semibold text-sky-800 text-sm">Veri miktarına göre 15–45 saniye sürebilir.</div>
+              <div class="text-sky-700 text-xs mt-1">Tamamlanana kadar editörü kapatma. Spinner durduğunda bitti demektir.</div>
+            </div>
+          </div>
+
+          <div class="ss-box">
+            <div class="ss-label">Ekran Görüntüsü 15</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title">syncAll Çalışıyor — Yürütme Günlüğü</div>
+            <div class="ss-sub">Editör alt panelde "=== syncAll START ===" ve ardından "syncAll COMPLETE" mesajları görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 11: HAZIR!
+      ───────────────────────────────────── -->
+      <div id="step-11" class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden text-white"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-white/20">
+          <div class="step-num bg-white/20 text-white">🎉</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-1">Tamamlandı</div>
+            <h2 class="text-xl font-bold">Hazırsın!</h2>
+          </div>
+          <button @click="toggle(10)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[10]
+                    ? 'bg-white text-emerald-700 border-white font-bold'
+                    : 'bg-white/20 border-white/40 text-white hover:bg-white/30'">
+            <span x-text="checkedSteps[10] ? '✓ Tamamlandı!' : 'Tamamlandı'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-emerald-50 text-sm leading-relaxed">
+            Kurulum tamamlandı. Artık spreadsheet'e dön — <strong>Dash</strong> sayfasında
+            dashboard verilerini görebilirsin.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-white/15 rounded-xl p-4">
+              <div class="text-2xl mb-2">⚡</div>
+              <div class="font-semibold text-sm">Otomatik Güncelleme</div>
+              <div class="text-emerald-100 text-xs mt-1">Her 5 dakikada bir syncAll otomatik çalışır. Artık elle çalıştırmana gerek yok.</div>
+            </div>
+            <div class="bg-white/15 rounded-xl p-4">
+              <div class="text-2xl mb-2">📊</div>
+              <div class="font-semibold text-sm">Dash Sayfası</div>
+              <div class="text-emerald-100 text-xs mt-1">Güncel kazanç, work unit ve session bilgilerini Dash sayfasında takip et.</div>
+            </div>
+            <div class="bg-white/15 rounded-xl p-4">
+              <div class="text-2xl mb-2">⏰</div>
+              <div class="font-semibold text-sm">Trigger'ı Görüntüle</div>
+              <div class="text-emerald-100 text-xs mt-1">Script editöründe sol paneldeki ⏰ (Tetikleyiciler) simgesine tıklayarak aktif trigger'ları görebilirsin.</div>
+            </div>
+            <div class="bg-white/15 rounded-xl p-4">
+              <div class="text-2xl mb-2">📜</div>
+              <div class="font-semibold text-sm">Hist Sayfası</div>
+              <div class="text-emerald-100 text-xs mt-1">Tüm geçmiş oyunlar, aylık başlıklar ve kazanç/work unit özetleri Hist sayfasındadır.</div>
+            </div>
+          </div>
+
+          <div class="ss-box" style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3);">
+            <div class="ss-label" style="color:rgba(255,255,255,0.6)">Ekran Görüntüsü 16</div>
+            <div class="ss-icon">📸</div>
+            <div class="ss-title" style="color:white">Dash Sayfası — Verilerle Dolu</div>
+            <div class="ss-sub" style="color:rgba(255,255,255,0.7)">İlk syncAll sonrası dashboard verilerle dolmuş. Work unit, kazanç ve session bilgileri görünüyor.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           SORUN GİDERME
+      ───────────────────────────────────── -->
+      <div id="sorun-giderme" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-center gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-slate-100 text-slate-600">🔧</div>
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">Sorun Giderme</h2>
+            <p class="text-slate-500 text-xs mt-0.5">Sık karşılaşılan sorunlar ve çözümleri</p>
+          </div>
+        </div>
+        <div class="p-6 space-y-3">
+
+          <!-- Problem items -->
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-red-500">●</span>
+                <span class="text-sm font-semibold text-slate-800">"Script function not found" hatası</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              Script editöründe kodu düzgün kaydetmedin. Editörü aç, <kbd class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono">Ctrl+S</kbd> ile kaydet ve tekrar çalıştır.
+            </div>
+          </details>
+
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-red-500">●</span>
+                <span class="text-sm font-semibold text-slate-800">#REF! hataları kurulum sonrası devam ediyor</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              SET sayfasındaki hücreleri kontrol et. Özellikle Kaynak Sheet ID ve Fiyat Sheet ID boş veya hatalı olabilir. Ayrıca bölge ayarının ABD olduğundan emin ol.
+            </div>
+          </details>
+
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-amber-500">●</span>
+                <span class="text-sm font-semibold text-slate-800">Dashboard boş veya güncellenmedi</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              Script editöründen <code class="bg-slate-100 px-1 rounded text-indigo-700 text-xs">syncAll</code>'ı tekrar çalıştır. İlk çalıştırma bazen tamamlanmadan timeout olabilir — ikinci çalıştırmada genelde düzelir.
+            </div>
+          </details>
+
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-amber-500">●</span>
+                <span class="text-sm font-semibold text-slate-800">"Exceeded maximum execution time" hatası</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              Çok fazla veri varsa ilk sync zaman aşımına uğrayabilir. <code class="bg-slate-100 px-1 rounded text-indigo-700 text-xs">syncAll</code>'ı tekrar çalıştır — kaldığı yerden devam eder.
+            </div>
+          </details>
+
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-slate-400">●</span>
+                <span class="text-sm font-semibold text-slate-800">5 dakikada bir güncelleme çalışmıyor</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              Script editöründe sol paneldeki ⏰ (Tetikleyiciler) simgesine tıkla. Listede <code class="bg-slate-100 px-1 rounded text-indigo-700 text-xs">syncAll</code> trigger'ı görünmüyorsa, <code class="bg-slate-100 px-1 rounded text-indigo-700 text-xs">setupSyncAllTrigger</code>'ı tekrar çalıştır.
+            </div>
+          </details>
+
+          <details class="border border-slate-200 rounded-xl overflow-hidden group">
+            <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="text-slate-400">●</span>
+                <span class="text-sm font-semibold text-slate-800">İzin ekranını kapattım, yeniden açmak istiyorum</span>
+              </div>
+              <span class="text-slate-400 text-sm group-open:rotate-180 transition-transform inline-block">▼</span>
+            </summary>
+            <div class="px-4 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+              <code class="bg-slate-100 px-1 rounded text-indigo-700 text-xs">setupSyncAllTrigger</code>'ı tekrar çalıştır. İzin henüz verilmemişse "Yetkilendirme gerekli" diyalogu tekrar açılır.
+            </div>
+          </details>
+
+        </div>
+      </div>
+
+      <!-- Bottom spacer -->
+      <div class="h-8"></div>
+
+    </div><!-- /max-w-2xl -->
+  </main><!-- /main -->
+
+
+  <!-- ── Complete overlay (shows when all done) ── -->
+  <div x-show="completedSteps === totalSteps"
+       x-transition:enter="transition ease-out duration-500"
+       x-transition:enter-start="opacity-0 translate-y-4"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       class="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white rounded-2xl shadow-2xl p-5 max-w-xs"
+       style="display:none">
+    <div class="text-2xl mb-1">🎉</div>
+    <div class="font-bold text-sm">Tüm adımlar tamamlandı!</div>
+    <div class="text-emerald-200 text-xs mt-1">One Roof hazır ve çalışıyor.</div>
+  </div>
+
+
+  <script>
+    function guide() {
+      return {
+        steps: [
+          { nav: 'Gereksinimler' },
+          { nav: 'Dosyayı İçe Aktar' },
+          { nav: 'Bölge Ayarı (ABD)' },
+          { nav: '#REF! Hataları' },
+          { nav: 'Apps Script\'i Aç' },
+          { nav: 'Kodu Yapıştır' },
+          { nav: 'SET Sayfası' },
+          { nav: 'setupSyncAllTrigger' },
+          { nav: 'İzinleri Ver' },
+          { nav: 'syncAll Çalıştır' },
+          { nav: 'Hazırsın! 🎉' }
+        ],
+        checkedSteps: JSON.parse(localStorage.getItem('oneroof_steps') || 'null')
+                      || Array(11).fill(false),
+        get totalSteps() { return this.steps.length; },
+        get completedSteps() { return this.checkedSteps.filter(Boolean).length; },
+        get progress() {
+          return Math.round((this.completedSteps / this.totalSteps) * 100);
+        },
+        toggle(i) {
+          this.checkedSteps[i] = !this.checkedSteps[i];
+          // Persist across page refreshes
+          localStorage.setItem('oneroof_steps', JSON.stringify(this.checkedSteps));
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      AOS.init({ duration: 550, once: true, offset: 60, easing: 'ease-out-quad' });
+    });
+  </script>
+
+</body>
+</html>

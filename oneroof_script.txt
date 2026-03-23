@@ -1,0 +1,1490 @@
+/************************************************************
+ * ONE ROOF SCRIPT (MERGED SINGLE FILE) — OPTIMISED
+ *
+ * Performance improvements vs. original:
+ *  1. loadAllData: batch reads B3:D (eliminates ~2×N API calls per sync)
+ *  2. soccerBasePrice cached once in loadAllData (was fetched 7× per sync)
+ *  3. Session groupings + stats computed once in loadAllData (was 5× per sync)
+ *  4. findAllSessions refactored to use pre-grouped data (2 fewer groupIntoSessions calls)
+ *  5. Batch writes in displaySessionStats (12 → 2 API calls)
+ *  6. Batch writes in updateCurrentOrNextSessionDetails (~8 → ~3 API calls)
+ *  7. updateAllMonthStatistics: removed Math.min(lastRow, 100) correctness bug
+ *
+ * IMPORTANT:
+ * - No logic, formula, visual or layout changes — only API call reduction.
+ ************************************************************/
+
+/***********************
+ * 0) MASTER RUNNER + TRIGGER
+ ************************/
+function syncAll() {
+  const lock = LockService.getScriptLock();
+  const locked = lock.tryLock(25000);
+  if (!locked) {
+    Logger.log('syncAll skipped (already running)');
+    return;
+  }
+
+  const start = new Date();
+  Logger.log('=== syncAll START ===');
+
+  try {
+    try {
+      syncGamesFromLiveToHist();
+      Logger.log('✓ Hist sync done');
+    } catch (e) {
+      Logger.log('✗ Hist sync error: ' + e);
+    }
+
+    try {
+      updateGameStatuses();
+      Logger.log('✓ Status update done');
+    } catch (e) {
+      Logger.log('✗ Status update error: ' + e);
+    }
+
+    try {
+      syncDashboard();
+      Logger.log('✓ Dash sync done');
+    } catch (e) {
+      Logger.log('✗ Dash sync error: ' + e);
+    }
+
+    Logger.log('=== syncAll COMPLETE: ' + (new Date() - start) + 'ms ===');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setupSyncAllTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach(t => {
+    const fn = t.getHandlerFunction();
+    if (
+      fn === 'syncAll' ||
+      fn === 'syncDashboard' ||
+      fn === 'syncGamesFromLiveToHist' ||
+      fn === 'updateGameStatuses'
+    ) {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  ScriptApp.newTrigger('syncAll')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+
+  Logger.log('✓ Created 5-minute trigger for syncAll');
+}
+
+/***********************
+ * 1) LIVE -> HIST SYNC
+ ************************/
+function syncGamesFromLiveToHist() {
+  const startTime = new Date();
+  Logger.log('=== SYNC START (Live -> Hist) ===');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const liveSheet = ss.getSheetByName('Live');
+  const histSheet = ss.getSheetByName('Hist');
+  const setSheet = ss.getSheetByName('SET');
+
+  const liveLastRow = liveSheet.getLastRow();
+  if (liveLastRow < 2) return;
+
+  const liveData = liveSheet.getRange(2, 1, liveLastRow - 1, 15)
+    .getValues()
+    .filter(row => row[0]);
+
+  if (liveData.length === 0) return;
+
+  const histLastRow = histSheet.getLastRow();
+  const existingIDs = new Map();
+  const monthHeaders = new Map();
+
+  if (histLastRow > 1) {
+    const histVals = histSheet.getRange(2, 1, histLastRow - 1, 1).getDisplayValues();
+
+    histVals.forEach((row, idx) => {
+      const val = row[0];
+      if (!val) return;
+
+      const str = val.toString().trim().toUpperCase();
+
+      if (str.match(/^(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{4}$/)) {
+        const actualRow = idx + 2;
+        if (!monthHeaders.has(str)) {
+          monthHeaders.set(str, actualRow);
+          Logger.log('Found existing month: ' + str + ' at row ' + actualRow);
+        }
+      } else {
+        existingIDs.set(str, idx + 2);
+      }
+    });
+  }
+
+  Logger.log('Existing games: ' + existingIDs.size + ', Existing months: ' + monthHeaders.size);
+
+  let gamesAdded = 0;
+  let sourcesUpdated = 0;
+
+  liveData.forEach(row => {
+    const id = row[0].toString();
+    const idUpper = id.toUpperCase();
+
+    const primarySource = row[10];
+    const secondarySource = row[11];
+    const source = primarySource || secondarySource || '';
+
+    if (existingIDs.has(idUpper)) {
+      const existingRow = existingIDs.get(idUpper);
+      if (source) {
+        histSheet.getRange(existingRow, 14).setValue(source);
+        sourcesUpdated++;
+        Logger.log('Updated source for game ' + id + ': ' + source);
+      }
+      return;
+    }
+
+    let gameDate;
+    if (row[1] instanceof Date) {
+      gameDate = row[1];
+    } else {
+      const dateStr = row[1].toString();
+      if (!dateStr.includes('/')) return;
+      const [d, m, y] = dateStr.split('/');
+      gameDate = new Date(+y, +m - 1, +d);
+    }
+
+    if (isNaN(gameDate.getTime())) return;
+
+    const gameMonth = gameDate
+      .toLocaleString('en-US', { month: 'long', year: 'numeric' })
+      .toUpperCase();
+
+    if (!monthHeaders.has(gameMonth)) {
+      Logger.log('Month ' + gameMonth + ' does not exist, creating...');
+
+      histSheet.insertRowAfter(1);
+      setSheet.getRange(271, 1, 1, 14).copyFormatToRange(histSheet, 1, 14, 2, 2);
+
+      histSheet.getRange('A2:F2').merge().setValue(gameMonth);
+      histSheet.getRange('G2:H2').merge().setValue('Games Assigned: 0');
+      histSheet.getRange('I2').setValue('Games Covered: 0');
+      histSheet.getRange('J2:M2').merge().setValue('Total Earnings: 0 ₺ | Work Units: 0.0');
+
+      monthHeaders.set(gameMonth, 2);
+
+      monthHeaders.forEach((rowNum, month) => {
+        if (month !== gameMonth) monthHeaders.set(month, rowNum + 1);
+      });
+
+      Logger.log('Created month: ' + gameMonth + ' at row 2');
+    }
+
+    const insertAt = 3;
+    histSheet.insertRowBefore(insertAt);
+
+    monthHeaders.forEach((rowNum, month) => {
+      if (rowNum >= insertAt) monthHeaders.set(month, rowNum + 1);
+    });
+
+    const srcRow = (insertAt % 2 === 0) ? 272 : 273;
+    setSheet.getRange(srcRow, 1, 1, 14).copyFormatToRange(histSheet, 1, 14, insertAt, insertAt);
+
+    const validations = setSheet.getRange(srcRow, 1, 1, 14).getDataValidations();
+    histSheet.getRange(insertAt, 1, 1, 14).setDataValidations(validations);
+
+    histSheet.getRange(insertAt, 1, 1, 14).setValues([[
+      row[0], row[1], row[2], row[3], row[4],
+      row[5], row[6], row[7], row[8], row[9],
+      '', 'Pending', row[14], source
+    ]]);
+
+    histSheet.getRange(insertAt, 11).setFormula(
+      '=IF(M' + insertAt + '="";"";VALUE(IFERROR(VLOOKUP(M' + insertAt + ';SET!$A$2:$J$45;SET!$B$50+2;FALSE);"")))'
+    );
+
+    existingIDs.set(idUpper, insertAt);
+    gamesAdded++;
+    Logger.log('Added game ' + id + ' at row ' + insertAt + ' with source: ' + source);
+  });
+
+  Logger.log('Added ' + gamesAdded + ' games, Updated ' + sourcesUpdated + ' sources');
+
+  if (gamesAdded > 0) {
+    updateMonthHeaderRanges(histSheet);
+  }
+
+  Logger.log('=== SYNC COMPLETE (Live -> Hist) - ' + (new Date() - startTime) + 'ms ===');
+}
+
+function fixExistingPriceFormulas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const histSheet = ss.getSheetByName('Hist');
+
+  const lastRow = histSheet.getLastRow();
+  let fixedCount = 0;
+
+  Logger.log('Fixing existing price formulas...');
+
+  for (let i = 3; i <= lastRow; i++) {
+    const currentFormula = histSheet.getRange(i, 11).getFormula();
+
+    if (currentFormula && currentFormula.includes('VLOOKUP') && !currentFormula.includes('VALUE(')) {
+      const newFormula = '=IF(M' + i + '="";"";VALUE(IFERROR(VLOOKUP(M' + i + ';SET!$A$2:$J$45;SET!$B$50+2;FALSE);"")))';
+      histSheet.getRange(i, 11).setFormula(newFormula);
+      fixedCount++;
+    }
+  }
+
+  Logger.log('Fixed ' + fixedCount + ' price formulas');
+}
+
+function updateMonthHeaderRanges(histSheet) {
+  const lastRow = histSheet.getLastRow();
+  if (lastRow < 2) return;
+
+  Logger.log('Updating month header ranges...');
+
+  const allValues = histSheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
+  const monthHeaders = [];
+
+  allValues.forEach((row, idx) => {
+    const val = row[0];
+    if (val && val.toString().match(/JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER/i)) {
+      monthHeaders.push(idx + 2);
+    }
+  });
+
+  Logger.log('Found ' + monthHeaders.length + ' month headers');
+
+  monthHeaders.forEach((headerRow, index) => {
+    const startRow = headerRow + 1;
+    const endRow = (index < monthHeaders.length - 1) ? monthHeaders[index + 1] - 1 : lastRow;
+
+    if (startRow > endRow) return;
+
+    histSheet.getRange(headerRow, 7, 1, 2)
+      .setFormula('="Games Assigned: "&COUNTA(A' + startRow + ':A' + endRow + ')');
+
+    histSheet.getRange(headerRow, 9)
+      .setFormula('="Games Covered: "&COUNTIF(L' + startRow + ':L' + endRow + ';"Covered")+COUNTIF(L' + startRow + ':L' + endRow + ';"Removed")');
+
+    histSheet.getRange(headerRow, 10, 1, 4)
+      .setFormula(
+        '="Total Earnings: "&TEXT(SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Covered")+SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Removed");"#,##0")' +
+        '&" ₺ | Work Units: "&TEXT(ROUND((SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Covered")+SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Removed"))/' +
+        'INDEX(SET!$B$28:$J$28;1;SET!$B$50+1)*4;0)/4;"0.##")'
+      );
+  });
+
+  Logger.log('Month headers updated');
+}
+
+function parseMonthString(monthStr) {
+  const parts = monthStr.split(' ');
+  if (parts.length !== 2) return new Date(0);
+
+  const monthNames = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+  const monthIndex = monthNames.indexOf(parts[0]);
+  const year = parseInt(parts[1], 10);
+
+  if (monthIndex === -1 || isNaN(year)) return new Date(0);
+  return new Date(year, monthIndex, 1);
+}
+
+/***********************
+ * 2) STATUS UPDATE (Hist)
+ ************************/
+function updateGameStatuses() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const liveSheet = ss.getSheetByName('Live');
+  const histSheet = ss.getSheetByName('Hist');
+  const setSheet = ss.getSheetByName('SET');
+
+  const now = new Date();
+  const cetOffset = 6 * 60 * 60 * 1000;
+  const nowCET = new Date(now.getTime() + cetOffset);
+
+  Logger.log('=== STATUS UPDATE START ===');
+  Logger.log('Current time CET: ' + nowCET);
+
+  const durationData = setSheet.getRange('E127:G170').getValues();
+  const durationMap = {};
+  durationData.forEach(row => {
+    if (row[0]) durationMap[row[0]] = parseFloat(row[2]) || 2;
+  });
+
+  const liveLastRow = liveSheet.getLastRow();
+  const liveIDs = new Set();
+  if (liveLastRow >= 2) {
+    const liveData = liveSheet.getRange('A2:A' + liveLastRow).getValues();
+    liveData.forEach(row => {
+      if (row[0]) liveIDs.add(row[0].toString());
+    });
+  }
+
+  Logger.log('Live game IDs count: ' + liveIDs.size);
+
+  const histLastRow = histSheet.getLastRow();
+  if (histLastRow < 3) return;
+
+  const histData = histSheet.getRange('A3:M' + histLastRow).getValues();
+  const histDataDisplay = histSheet.getRange('B3:D' + histLastRow).getDisplayValues();
+
+  let pendingCount = 0;
+  let coveredCount = 0;
+  let deletedCount = 0;
+
+  histData.forEach((row, idx) => {
+    const id = row[0];
+    const status = row[11];
+
+    if (!id || (typeof id === 'string' && id.match(/[A-Z]+ \d{4}/))) return;
+    if (status !== 'Pending') return;
+
+    pendingCount++;
+
+    const sportName = row[12];
+    if (!sportName) return;
+
+    const dateStr = histDataDisplay[idx][0];
+    const timeStr = histDataDisplay[idx][2];
+
+    if (!dateStr || !timeStr) return;
+
+    const dateParts = dateStr.split('/');
+    if (dateParts.length !== 3) return;
+
+    const timeParts = timeStr.split(':');
+    if (timeParts.length < 2) return;
+
+    const gameStart = new Date(
+      parseInt(dateParts[2], 10),
+      parseInt(dateParts[1], 10) - 1,
+      parseInt(dateParts[0], 10),
+      parseInt(timeParts[0], 10),
+      parseInt(timeParts[1], 10),
+      0, 0
+    );
+
+    if (isNaN(gameStart.getTime())) return;
+
+    const duration = durationMap[sportName] || 2;
+    const gameEnd = new Date(gameStart.getTime() + duration * 60 * 60 * 1000);
+    const actualRow = idx + 3;
+
+    const isInLive = liveIDs.has(id.toString());
+    const isFinished = nowCET.getTime() > gameEnd.getTime();
+
+    if (isFinished) {
+      histSheet.getRange(actualRow, 12).setValue('Covered');
+      coveredCount++;
+      Logger.log('Covered: ' + id);
+    } else if (!isInLive) {
+      histSheet.getRange(actualRow, 12).setValue('Deleted');
+      deletedCount++;
+      Logger.log('Deleted: ' + id);
+    }
+  });
+
+  Logger.log('Processed: ' + pendingCount + ' pending games');
+  Logger.log('Marked Covered: ' + coveredCount);
+  Logger.log('Marked Deleted: ' + deletedCount);
+
+  updateAllMonthStatistics(histSheet);
+
+  Logger.log('=== STATUS UPDATE COMPLETE ===');
+}
+
+// OPTIMISED: removed Math.min(lastRow, 100) cap — was silently skipping
+// month headers past row ~100, leaving their statistics formulas stale.
+function updateAllMonthStatistics(histSheet) {
+  const lastRow = histSheet.getLastRow();
+  Logger.log('Updating month statistics');
+
+  if (lastRow < 2) return;
+
+  const monthHeaders = [];
+
+  // Batch-read column A once — avoids one API call per row in the scan loop
+  const colAValues = histSheet.getRange('A2:A' + lastRow).getDisplayValues();
+
+  for (let i = 0; i < colAValues.length; i++) {
+    const displayVal = colAValues[i][0];
+    if (!displayVal) continue;
+
+    const strVal = displayVal.toString().toUpperCase().trim();
+    if (strVal.match(/JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER/)) {
+      const rowNum = i + 2; // colAValues[0] corresponds to row 2
+      monthHeaders.push(rowNum);
+      Logger.log('Found month header at row ' + rowNum + ': ' + displayVal);
+    }
+  }
+
+  Logger.log('Total month headers found: ' + monthHeaders.length);
+  if (monthHeaders.length === 0) return;
+
+  monthHeaders.forEach((headerRow, index) => {
+    const startRow = headerRow + 1;
+    const endRow = (index < monthHeaders.length - 1) ? monthHeaders[index + 1] - 1 : lastRow;
+
+    if (startRow > endRow) return;
+
+    histSheet.getRange(headerRow, 7, 1, 2)
+      .setFormula('="Games Assigned: "&COUNTA(A' + startRow + ':A' + endRow + ')');
+
+    histSheet.getRange(headerRow, 9)
+      .setFormula('="Games Covered: "&COUNTIF(L' + startRow + ':L' + endRow + ';"Covered")+COUNTIF(L' + startRow + ':L' + endRow + ';"Removed")');
+
+    histSheet.getRange(headerRow, 10, 1, 4)
+      .setFormula(
+        '="Total Earnings: "&TEXT(SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Covered")+SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Removed");"#,##0")' +
+        '&" ₺ | Work Units: "&TEXT(ROUND((SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Covered")+SUMIFS(K' + startRow + ':K' + endRow + ';L' + startRow + ':L' + endRow + ';"Removed"))/' +
+        'INDEX(SET!$B$28:$J$28;1;SET!$B$50+1)*4;0)/4;"0.##")'
+      );
+
+    Logger.log('Updated formulas for row ' + headerRow);
+  });
+
+  Logger.log('Month statistics formulas updated');
+}
+
+/***********************
+ * 3) DASHBOARD SYNC (Hist -> Dash)
+ ************************/
+function syncDashboard() {
+  const startTime = new Date();
+  Logger.log('=== SYNC START (Hist -> Dash) ===');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dashSheet = ss.getSheetByName('Dash');
+  if (!dashSheet) return;
+
+  SpreadsheetApp.flush();
+
+  let stepStart = new Date();
+  const sharedData = loadAllData(ss);
+  Logger.log('✓ Data Load: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateEarnings(dashSheet, sharedData);
+  Logger.log('✓ Earnings: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateUnits(dashSheet, sharedData);
+  Logger.log('✓ Units: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateGames(dashSheet, sharedData);
+  Logger.log('✓ Games: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateSession(dashSheet, sharedData);
+  Logger.log('✓ Session: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateWeekTimeline(dashSheet, sharedData);
+  Logger.log('✓ Week: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateSportsBreakdown(dashSheet, sharedData);
+  Logger.log('✓ Sports: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateCountriesBreakdown(dashSheet, sharedData);
+  Logger.log('✓ Countries: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateEarningsVelocity(dashSheet, sharedData);
+  Logger.log('✓ Earning Velocity: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateMonthlyProjection(dashSheet, sharedData);
+  Logger.log('✓ MonthlyProjection: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateCurrentStreak(dashSheet, sharedData);
+  Logger.log('✓ Current Streak: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateWeekLoad(dashSheet, sharedData);
+  Logger.log('✓ Week Load: ' + (new Date() - stepStart) + 'ms');
+
+  stepStart = new Date();
+  updateIdleTimeStats(dashSheet, sharedData);
+  Logger.log('✓ Idle Time: ' + (new Date() - stepStart) + 'ms');
+
+  Logger.log('=== TOTAL (Hist -> Dash): ' + (new Date() - startTime) + 'ms ===');
+}
+
+// OPTIMISED:
+//  - Batch reads: histDisplayValues reads B3:D in one API call (was 2 calls per row in the loop)
+//  - soccerBasePrice computed once and cached on sharedData
+//  - coveredSessions, allSessions pre-grouped and stats pre-calculated
+//  - sessions (current/next/last) resolved once via findAllSessions
+function loadAllData(ss) {
+  const histSheet = ss.getSheetByName('Hist');
+  const setSheet = ss.getSheetByName('SET');  // setSheet in scope here for getSoccerBasePrice below
+
+  const lastRow = histSheet.getLastRow();
+  const histData = histSheet.getRange('A3:N' + lastRow).getValues();
+
+  // BATCH READ — eliminates 2 API calls per game row from the loop below
+  const histDisplayValues = histSheet.getRange('B3:D' + lastRow).getDisplayValues();
+
+  const headerStats = histSheet.getRange('G2:J2').getDisplayValues()[0];
+
+  const sportLookupData = setSheet.getRange('E118:G170').getValues();
+  const sportDurationMap = {};
+  sportLookupData.forEach(row => {
+    if (row[1]) sportDurationMap[row[1]] = row[2] || 2;
+  });
+
+  const games = [];
+  for (let i = 0; i < histData.length; i++) {
+    const row = histData[i];
+    if (row[0] === '') continue;
+
+    const dateCell = histDisplayValues[i][0]; // col B — no API call
+    if (!dateCell) continue;
+
+    const dateParts = dateCell.split('/');
+    if (dateParts.length !== 3) continue;
+
+    const day   = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const year  = parseInt(dateParts[2], 10);
+
+    const timeCell = histDisplayValues[i][2]; // col D — no API call
+    if (!timeCell) continue;
+
+    const timeMatch = timeCell.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+    if (!timeMatch) continue;
+
+    let hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2], 10);
+
+    if (timeMatch[4]) {
+      if (timeMatch[4].toUpperCase() === 'PM' && hours !== 12) hours += 12;
+      if (timeMatch[4].toUpperCase() === 'AM' && hours === 12) hours = 0;
+    }
+
+    const game = {
+      dateDay:      day,
+      dateMonth:    month,
+      dateYear:     year,
+      timeHours:    hours,
+      timeMinutes:  minutes,
+      day:          row[2],
+      platform:     row[4],
+      sport:        row[5],
+      country:      row[6],
+      tournament:   row[7],
+      home:         row[8],
+      away:         row[9],
+      price:        row[10],
+      status:       row[11],
+      sportName:    row[12],
+      source:       row[13]
+    };
+
+    calculateGameTiming(game, sportDurationMap);
+    games.push(game);
+  }
+
+  // Cache once — getSoccerBasePrice was previously called 7× per sync
+  const soccerBasePrice = getSoccerBasePrice(setSheet);
+
+  // Pre-compute session groupings + stats — groupIntoSessions was previously called 5+× per sync
+  const coveredGames = games.filter(g => g.status === 'Covered' || g.status === 'Removed');
+  const activeGames  = games.filter(g => g.status === 'Covered' || g.status === 'Removed' || g.status === 'Pending');
+
+  const coveredSessions = groupIntoSessions(coveredGames);
+  coveredSessions.forEach(s => calculateSessionStats(s, soccerBasePrice));
+
+  const allSessions = groupIntoSessions(activeGames);
+  allSessions.forEach(s => calculateSessionStats(s, soccerBasePrice));
+
+  // findAllSessions now accepts pre-grouped data — 2 fewer internal groupIntoSessions calls
+  const sessions = findAllSessions({ games, allSessions, coveredSessions });
+
+  return {
+    games,
+    gamesAssignedText: headerStats[0],
+    gamesCoveredText:  headerStats[2],
+    monthStatsText:    headerStats[3],
+    histData,
+    soccerBasePrice,
+    allSessions,
+    coveredSessions,
+    sessions
+  };
+}
+
+function calculateGameTiming(game, sportDurationMap) {
+  const platformOffsets = { '💻': 45, '📞': 45, '📱': 30 };
+  const offsetMinutes = platformOffsets[game.platform] || 45;
+
+  const dateStr = game.dateYear + '-' +
+    String(game.dateMonth + 1).padStart(2, '0') + '-' +
+    String(game.dateDay).padStart(2, '0') + ' ' +
+    String(game.timeHours).padStart(2, '0') + ':' +
+    String(game.timeMinutes).padStart(2, '0') + ':00';
+
+  const gameTime = new Date(dateStr + ' GMT+0100');
+
+  game.gameTime     = gameTime;
+  game.sessionStart = new Date(gameTime.getTime() - (offsetMinutes * 60 * 1000));
+
+  const durationHours = sportDurationMap[game.sport] || 2;
+  game.gameEnd  = new Date(gameTime.getTime() + (durationHours * 60 * 60 * 1000));
+  game.duration = durationHours;
+}
+
+function getSoccerBasePrice(setSheet) {
+  try {
+    const userCategory = setSheet.getRange('B50').getValue();
+    const sportsColumn = setSheet.getRange('A:A').getValues();
+    let soccerRow = -1;
+
+    for (let i = 0; i < sportsColumn.length; i++) {
+      const sportName = sportsColumn[i][0];
+      if (sportName &&
+        sportName.toString().includes('Soccer') &&
+        !sportName.toString().includes('E-Sport')) {
+        soccerRow = i + 1;
+        break;
+      }
+    }
+
+    if (soccerRow === -1) return 624;
+
+    const columnIndex = 2 + userCategory;
+    const columnLetter = String.fromCharCode(64 + columnIndex);
+    const price = setSheet.getRange(columnLetter + soccerRow).getValue();
+
+    return price || 150;
+  } catch (e) {
+    return 624;
+  }
+}
+
+function calculateSessionStats(session, soccerBasePrice) {
+  let totalEarnings = 0;
+  session.games.forEach(game => {
+    totalEarnings += (game.price || 0);
+  });
+
+  // Snap to nearest 0.25 — all sport prices are designed to be 0.25-WU multiples,
+  // so rounding eliminates both float drift and any minor price mismatches.
+  const workUnits = soccerBasePrice > 0
+    ? Math.round((totalEarnings / soccerBasePrice) * 4) / 4
+    : 0;
+
+  session.earnings      = totalEarnings;
+  session.units         = workUnits;
+  session.durationHours = (session.sessionEnd - session.sessionStart) / (60 * 60 * 1000);
+}
+
+// OPTIMISED: accepts pre-grouped { games, allSessions, coveredSessions } instead of
+// calling groupIntoSessions internally three times.
+// One internal groupIntoSessions call is retained for pending-only sessions (needed for "next").
+function findAllSessions({ games, allSessions, coveredSessions }) {
+  const now = new Date();
+
+  // current: first session in allSessions (covered+pending) where now falls inside.
+  // Purely time-based — does not require covered games in the session.
+  let current = null;
+  const currentSessionGameIds = new Set();
+
+  for (let i = 0; i < allSessions.length; i++) {
+    const session = allSessions[i];
+    if (now >= session.sessionStart && now <= session.sessionEnd) {
+      current = session;
+      session.games.forEach(game => {
+        currentSessionGameIds.add(game.home + '|' + game.away + '|' + game.gameTime.getTime());
+      });
+      break;
+    }
+  }
+
+  // next: first pending-only session that starts in the future.
+  // allSessions mixes covered+pending; pending-only grouping is required for an actionable next session.
+  const pendingGames = games.filter(g => g.status === 'Pending');
+  const pendingSessions = groupIntoSessions(pendingGames);
+  let next = null;
+  for (let i = 0; i < pendingSessions.length; i++) {
+    if (pendingSessions[i].sessionStart > now) { next = pendingSessions[i]; break; }
+  }
+
+  // last: most recent covered session ending before now, excluding sessions that share
+  // games with the current session (handles partially-covered ongoing sessions).
+  // coveredSessions is sorted ascending by sessionStart (guaranteed by groupIntoSessions).
+  const filteredCoveredSessions = currentSessionGameIds.size > 0
+    ? coveredSessions.filter(session =>
+        !session.games.some(game =>
+          currentSessionGameIds.has(game.home + '|' + game.away + '|' + game.gameTime.getTime())
+        )
+      )
+    : coveredSessions;
+
+  let last = null;
+  for (let i = filteredCoveredSessions.length - 1; i >= 0; i--) {
+    if (filteredCoveredSessions[i].sessionEnd < now) { last = filteredCoveredSessions[i]; break; }
+  }
+
+  return { current, next, last };
+}
+
+function groupIntoSessions(games) {
+  if (games.length === 0) return [];
+
+  games.sort((a, b) => a.sessionStart - b.sessionStart);
+
+  const sessions = [];
+  let currentSession = {
+    games: [games[0]],
+    sessionStart: games[0].sessionStart,
+    sessionEnd: games[0].gameEnd
+  };
+
+  for (let i = 1; i < games.length; i++) {
+    const game = games[i];
+    const gapHours = (game.sessionStart - currentSession.sessionEnd) / (60 * 60 * 1000);
+
+    if (gapHours <= 6) {
+      currentSession.games.push(game);
+      currentSession.sessionEnd = game.gameEnd;
+    } else {
+      sessions.push(currentSession);
+      currentSession = {
+        games: [game],
+        sessionStart: game.sessionStart,
+        sessionEnd: game.gameEnd
+      };
+    }
+  }
+
+  sessions.push(currentSession);
+  return sessions;
+}
+
+/******** Earnings ********/
+function updateEarnings(dashSheet, sharedData) {
+  const earningsMatch = sharedData.monthStatsText.match(/Total Earnings:\s*([\d,]+)\s*₺/);
+  const totalEarnings = earningsMatch ? parseInt(earningsMatch[1].replace(/,/g, ''), 10) : 0;
+  const formattedEarnings = '₺' + totalEarnings.toLocaleString('tr-TR');
+
+  const props = PropertiesService.getUserProperties();
+  props.setProperty('earningsValue', formattedEarnings);
+
+  const isHidden = props.getProperty('earningsHidden') === 'true';
+
+  if (isHidden) dashSheet.getRange('A3').setValue('₺••••••');
+  else dashSheet.getRange('A3').setValue(formattedEarnings);
+}
+
+function toggleEarnings() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dashSheet = ss.getSheetByName('Dash');
+  const cell = dashSheet.getRange('A3');
+
+  const props = PropertiesService.getUserProperties();
+  const isHidden = props.getProperty('earningsHidden') === 'true';
+
+  if (isHidden) {
+    const realValue = props.getProperty('earningsValue') || '₺0';
+    cell.setValue(realValue);
+    props.setProperty('earningsHidden', 'false');
+  } else {
+    cell.setValue('₺••••••');
+    props.setProperty('earningsHidden', 'true');
+  }
+}
+
+function initializeEarningsVisibility() {
+  const props = PropertiesService.getUserProperties();
+  props.setProperty('earningsHidden', 'true');
+  Logger.log('✓ Earnings set to hidden by default');
+}
+
+function updateUnits(dashSheet, sharedData) {
+  // Read directly from the Hist month header formula — it already computes
+  // SUMIFS(Covered) + SUMIFS(Removed) and handles manual/backup entries correctly.
+  const unitsMatch = sharedData.monthStatsText.match(/Work Units:\s*([\d.]+)/);
+  const units = unitsMatch ? parseFloat(unitsMatch[1]) : 0;
+  dashSheet.getRange('C3').setValue(units);
+}
+
+function updateGames(dashSheet, sharedData) {
+  const assignedMatch = sharedData.gamesAssignedText.match(/Games Assigned:\s*(\d+)/);
+  const coveredMatch  = sharedData.gamesCoveredText.match(/Games Covered:\s*(\d+)/);
+
+  const gamesAssigned    = assignedMatch ? parseInt(assignedMatch[1], 10) : 0;
+  const gamesCovered     = coveredMatch  ? parseInt(coveredMatch[1],  10) : 0;
+  const completionRate   = gamesAssigned > 0 ? Math.round((gamesCovered / gamesAssigned) * 100) : 0;
+
+  dashSheet.getRange('E3:F3').setValues([[gamesAssigned + '/' + gamesCovered, completionRate + '%']]);
+}
+
+// OPTIMISED: uses pre-computed sharedData.sessions and sharedData.allSessions.
+// Removed: findAllSessions call, groupIntoSessions call, three calculateSessionStats calls.
+function updateSession(dashSheet, sharedData) {
+  dashSheet.getRange('E6:J').clearContent();
+
+  const sessions       = sharedData.sessions;
+  const allSessions    = sharedData.allSessions;
+  const soccerBasePrice = sharedData.soccerBasePrice;
+
+  // Stats (earnings, units, durationHours) already pre-calculated in loadAllData.
+  // Do NOT call calculateSessionStats here.
+
+  const activeSessionType = sessions.current ? 'CURRENT' : (sessions.next ? 'NEXT' : 'LAST');
+
+  let currentRow = 6;
+  if (sessions.current) {
+    currentRow = displaySession(dashSheet, sessions.current, currentRow, 'CURRENT SESSION', activeSessionType === 'CURRENT');
+  }
+  if (sessions.next) {
+    currentRow = displaySession(dashSheet, sessions.next, currentRow, 'NEXT SESSION', activeSessionType === 'NEXT');
+  }
+  if (sessions.last) {
+    currentRow = displaySession(dashSheet, sessions.last, currentRow, 'LAST SESSION', activeSessionType === 'LAST');
+  }
+
+  displaySessionStats(dashSheet, sessions.current, sessions.next, sessions.last);
+
+  updateMonthlySessionStats(dashSheet, allSessions, sessions.current, sessions.next, sessions.last, soccerBasePrice);
+  updateCurrentOrNextSessionDetails(dashSheet, sessions.current, sessions.next, sessions.last, allSessions, soccerBasePrice);
+  updateAverageSessionDuration(dashSheet, allSessions, soccerBasePrice);
+}
+
+// OPTIMISED: batch writes — 12 individual setValue calls → 2 setValues calls.
+function displaySessionStats(dashSheet, current, next, last) {
+  let colL = null, colM = null, colN = null;
+  let labelL = '', labelM = '', labelN = '';
+
+  if (current) {
+    colL = current; labelL = 'CURRENT';
+    if (next) {
+      colM = next; labelM = 'NEXT';
+      if (last) { colN = last; labelN = 'LAST'; }
+    } else if (last) {
+      colM = last; labelM = 'LAST';
+    }
+  } else if (next) {
+    colL = next; labelL = 'NEXT';
+    if (last) { colM = last; labelM = 'LAST'; }
+  } else if (last) {
+    colL = last; labelL = 'LAST';
+  }
+
+  if (!labelL) labelL = 'Δ';
+  if (!labelM) labelM = 'Δ';
+  if (!labelN) labelN = 'Δ';
+
+  function formatSessionData(session) {
+    if (!session) return ['--', '--', '--'];
+    const earnings = '₺' + Math.round(session.earnings || 0).toLocaleString('tr-TR');
+    const units    = (session.units || 0).toFixed(1) + 'u';
+    const idle     = calculateSessionIdleTime(session).toFixed(1) + 'h';
+    return [earnings, units, idle];
+  }
+
+  const dataL = formatSessionData(colL);
+  const dataM = formatSessionData(colM);
+  const dataN = formatSessionData(colN);
+
+  // Batch: 12 individual setValue calls → 2 setValues calls
+  dashSheet.getRange('L6:N6').setValues([[labelL, labelM, labelN]]);
+  dashSheet.getRange('L7:N9').setValues([
+    [dataL[0], dataM[0], dataN[0]],
+    [dataL[1], dataM[1], dataN[1]],
+    [dataL[2], dataM[2], dataN[2]]
+  ]);
+}
+
+// OPTIMISED: added soccerBasePrice param; removed internal getSoccerBasePrice + calculateSessionStats calls.
+function updateMonthlySessionStats(dashSheet, allSessions, current, next, last, soccerBasePrice) {
+  const now          = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear  = now.getFullYear();
+
+  // Stats already pre-calculated in loadAllData — no calculateSessionStats call needed.
+  const monthSessions = allSessions.filter(session =>
+    session.sessionStart.getMonth() === currentMonth &&
+    session.sessionStart.getFullYear() === currentYear
+  );
+
+  let biggestEarnings = 0;
+  monthSessions.forEach(session => {
+    if (session.earnings > biggestEarnings) biggestEarnings = session.earnings;
+  });
+
+  let longestDuration = 0;
+  monthSessions.forEach(session => {
+    if (session.durationHours > longestDuration) longestDuration = session.durationHours;
+  });
+
+  const biggestText = biggestEarnings > 0 ? '₺' + Math.round(biggestEarnings).toLocaleString('tr-TR') : '--';
+  const totalText   = monthSessions.length > 0 ? monthSessions.length.toString() : '--';
+  const longestText = longestDuration > 0 ? longestDuration.toFixed(1) + 'h' : '--';
+
+  dashSheet.getRange('L10').setValue(biggestText);
+  dashSheet.getRange('L11').setValue(totalText);
+  dashSheet.getRange('L12').setValue(longestText);
+}
+
+function displaySession(dashSheet, session, startRow, headerText, isActiveSession) {
+  const TIMEZONE = 'Europe/Amsterdam';
+
+  const headerRange = dashSheet.getRange('E' + startRow + ':J' + startRow);
+  const existingMerges = headerRange.getMergedRanges();
+  existingMerges.forEach(merge => merge.breakApart());
+
+  headerRange.merge();
+  const headerCell = dashSheet.getRange('E' + startRow);
+  headerCell.setValue(headerText);
+  headerCell.setFontSize(12);
+  headerCell.setFontWeight('bold');
+  headerCell.setFontFamily('Fira Sans');
+  headerCell.setFontColor('#FFFFFF');
+
+  const now = new Date();
+  const gamesToDisplay = (headerText === 'LAST SESSION') ? session.games.slice().reverse() : session.games;
+
+  let blueIndex = -1;
+  let lightBlueIndex = -1;
+
+  if (isActiveSession) {
+    for (let i = 0; i < gamesToDisplay.length; i++) {
+      if (now < gamesToDisplay[i].gameEnd) {
+        blueIndex = i;
+        if (i + 1 < gamesToDisplay.length) lightBlueIndex = i + 1;
+        break;
+      }
+    }
+  }
+
+  const rowData    = [];
+  const backgrounds = [];
+
+  for (let i = 0; i < gamesToDisplay.length; i++) {
+    const game    = gamesToDisplay[i];
+    const timeStr = Utilities.formatDate(game.gameTime, TIMEZONE, 'HH:mm');
+    const info    = game.platform + game.sport + game.country;
+    const matchup = game.home + ' vs ' + game.away;
+
+    rowData.push([game.day, timeStr, info, game.source || '', matchup, '']);
+
+    let bgColor = '#34495e';
+    if      (i === blueIndex)      bgColor = 'blue';
+    else if (i === lightBlueIndex) bgColor = '#4a86e8';
+
+    backgrounds.push([bgColor, bgColor, bgColor, bgColor, bgColor, bgColor]);
+  }
+
+  if (rowData.length > 0) {
+    const startRowData = startRow + 1;
+    const endRowData   = startRowData + rowData.length - 1;
+    const numRows      = rowData.length;
+
+    const dataRange = dashSheet.getRange('E' + startRowData + ':J' + endRowData);
+    const existingDataMerges = dataRange.getMergedRanges();
+    existingDataMerges.forEach(merge => merge.breakApart());
+
+    dataRange.setValues(rowData);
+    dataRange.setBackgrounds(backgrounds);
+    dataRange.setFontWeight('bold');
+    dataRange.setFontColor('#FFFFFF');
+    dataRange.setFontFamily('Fira Sans');
+
+    dashSheet.getRange('E' + startRowData + ':E' + endRowData).setFontSize(12);
+    dashSheet.getRange('F' + startRowData + ':F' + endRowData).setFontSize(12);
+    dashSheet.getRange('G' + startRowData + ':G' + endRowData).setFontSize(13);
+    dashSheet.getRange('H' + startRowData + ':H' + endRowData).setFontSize(8);
+    dashSheet.getRange('I' + startRowData + ':J' + endRowData).setFontSize(9);
+
+    for (let i = 0; i < numRows; i++) {
+      dashSheet.getRange('I' + (startRowData + i) + ':J' + (startRowData + i)).merge();
+    }
+  }
+
+  return startRow + 1 + gamesToDisplay.length;
+}
+
+// OPTIMISED: filters sharedData.allSessions by current week — no groupIntoSessions or calculateSessionStats.
+function updateWeekTimeline(dashSheet, sharedData) {
+  const { allSessions } = sharedData;
+
+  const now        = new Date();
+  const currentDay = now.getDay();
+  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  const dayHours = [0, 0, 0, 0, 0, 0, 0];
+  const dayColors = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e91e63'];
+
+  // Filter pre-computed sessions to current week; durationHours already on each session.
+  allSessions.forEach(session => {
+    if (session.sessionStart >= monday && session.sessionStart <= sunday) {
+      const sessionDay = session.sessionStart.getDay();
+      const dayIndex   = sessionDay === 0 ? 6 : sessionDay - 1;
+      dayHours[dayIndex] += session.durationHours;
+    }
+  });
+
+  const barData   = [];
+  const hoursData = [];
+  const colors    = [];
+  const MAX_BOXES = 24;
+
+  for (let i = 0; i < 7; i++) {
+    const hours       = dayHours[i];
+    const boxesFilled = Math.round(Math.min(MAX_BOXES, hours * 2));
+    const bar         = '■'.repeat(boxesFilled) + '□'.repeat(MAX_BOXES - boxesFilled);
+    barData.push([bar]);
+    hoursData.push([hours.toFixed(1) + 'h']);
+    colors.push([dayColors[i]]);
+  }
+
+  dashSheet.getRange('B6:B12').setValues(barData);
+  const barRange = dashSheet.getRange('B6:B12');
+  barRange.setFontSize(12);
+  barRange.setFontFamily('Impact');
+  barRange.setFontColors(colors);
+  dashSheet.getRange('D6:D12').setValues(hoursData);
+}
+
+function updateSportsBreakdown(dashSheet, sharedData) {
+  const workGames = sharedData.games.filter(g => g.status === 'Covered' || g.status === 'Pending');
+
+  const allSportNames = [
+    'Soccer', 'Basketball', 'Ice Hockey', 'E-sport', 'Tennis',
+    'Badminton', 'Rugby', 'Volleyball', 'Handball', 'Football', 'Other'
+  ];
+
+  const sportNames = allSportNames.filter(name => name !== 'E-sport' && name !== 'Other');
+  const sportCounts = {};
+  allSportNames.forEach(name => sportCounts[name] = 0);
+
+  let totalGames = 0;
+
+  workGames.forEach(game => {
+    const sportName = game.sportName || '';
+    let extracted = sportName;
+    if      (sportName.startsWith('SR '))     extracted = sportName.substring(3);
+    else if (sportName.startsWith('RTS '))    extracted = sportName.substring(4);
+    else if (sportName.startsWith('EX '))     extracted = sportName.substring(3);
+    else if (sportName.startsWith('iScout ')) extracted = sportName.substring(7);
+
+    if (extracted.includes('E-Sport') || extracted.includes('E-sport')) {
+      sportCounts['E-sport'] += 0.25;
+      totalGames += 0.25;
+    } else {
+      let matched = false;
+      for (let sport of sportNames) {
+        if (extracted.includes(sport)) {
+          sportCounts[sport] += 1;
+          totalGames += 1;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        sportCounts['Other'] += 1;
+        totalGames += 1;
+      }
+    }
+  });
+
+  const sportColors = ['#1abc9c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e74c3c', '#f39c12'];
+
+  const barData     = [];
+  const percentData = [];
+  const colors      = [];
+
+  for (let i = 0; i < allSportNames.length; i++) {
+    const count       = sportCounts[allSportNames[i]] || 0;
+    const percentage  = totalGames > 0 ? (count / totalGames) * 100 : 0;
+    const boxesFilled = Math.round((percentage / 100) * 20);
+    const bar         = '■'.repeat(boxesFilled) + '□'.repeat(20 - boxesFilled);
+    barData.push([bar]);
+    percentData.push([Math.round(percentage) + '%']);
+    colors.push([sportColors[i]]);
+  }
+
+  dashSheet.getRange('B14:B24').setValues(barData).setFontSize(14).setFontFamily('Impact').setFontColors(colors);
+  dashSheet.getRange('D14:D24').setFontFamily('Impact').setValues(percentData).setFontSize(11).setFontColors(colors);
+}
+
+function updateCountriesBreakdown(dashSheet, sharedData) {
+  const workGames = sharedData.games.filter(g => g.status === 'Covered' || g.status === 'Pending');
+
+  const countryCounts = {};
+  let totalGames = 0;
+
+  workGames.forEach(game => {
+    const countryEmoji = game.country;
+    if (countryEmoji === '🌍' || countryEmoji === '🌎' || countryEmoji === '🌏') return;
+    if (countryEmoji) {
+      countryCounts[countryEmoji] = (countryCounts[countryEmoji] || 0) + 1;
+      totalGames += 1;
+    }
+  });
+
+  const sortedCountries = Object.entries(countryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  const countryColors = ['#1abc9c', '#3498db', '#f39c12', '#9b59b6', '#e74c3c', '#2ecc71'];
+
+  const emojiData   = [];
+  const barData     = [];
+  const percentData = [];
+  const colors      = [];
+
+  for (let i = 0; i < 6; i++) {
+    if (i < sortedCountries.length) {
+      const [emoji, count] = sortedCountries[i];
+      const percentage  = totalGames > 0 ? (count / totalGames) * 100 : 0;
+      const boxesFilled = Math.round((percentage / 100) * 15);
+      const bar         = '■'.repeat(boxesFilled) + '□'.repeat(15 - boxesFilled);
+      emojiData.push([emoji]);
+      barData.push([bar]);
+      percentData.push([Math.round(percentage) + '%']);
+      colors.push([countryColors[i]]);
+    } else {
+      emojiData.push(['']);
+      barData.push(['']);
+      percentData.push(['']);
+      colors.push(['#000000']);
+    }
+  }
+
+  dashSheet.getRange('K19:K24').setValues(emojiData);
+  dashSheet.getRange('L19:L24').setValues(barData).setFontSize(16).setFontFamily('Impact').setFontColors(colors);
+  dashSheet.getRange('N19:N24').setValues(percentData);
+}
+
+// OPTIMISED: added soccerBasePrice param; batch writes K15:K17 and L14:L16.
+// Removed: internal getSoccerBasePrice + calculateSessionStats calls.
+function updateCurrentOrNextSessionDetails(dashSheet, current, next, last, allSessions, soccerBasePrice) {
+  const TIMEZONE_DISPLAY = 'Europe/Istanbul';
+
+  let activeSession = null;
+  let sessionType   = '';
+
+  if (current)   { activeSession = current; sessionType = 'CURRENT'; }
+  else if (next) { activeSession = next;    sessionType = 'NEXT';    }
+  else if (last) { activeSession = last;    sessionType = 'LAST';    }
+
+  if (activeSession) {
+    // Stats pre-calculated — no calculateSessionStats call.
+
+    let durationText;
+    if (sessionType === 'CURRENT') {
+      const now            = new Date();
+      const elapsedMinutes = Math.floor((now - activeSession.sessionStart) / (60 * 1000));
+      durationText = Math.floor(elapsedMinutes / 60) + 'h ' + (elapsedMinutes % 60) + 'm';
+    } else {
+      const workHours  = (activeSession.sessionEnd - activeSession.sessionStart) / (60 * 60 * 1000);
+      const totalHours = Math.floor(workHours);
+      const totalMins  = Math.round((workHours - totalHours) * 60);
+      durationText = totalHours + 'h ' + totalMins + 'm';
+    }
+
+    let k15Label, l15Value;
+    if (sessionType === 'CURRENT') {
+      k15Label = 'Started';
+      l15Value = Utilities.formatDate(activeSession.sessionStart, TIMEZONE_DISPLAY, 'HH:mm') + ' TSI';
+    } else if (sessionType === 'NEXT') {
+      k15Label = 'Will Start';
+      l15Value = Utilities.formatDate(activeSession.sessionStart, TIMEZONE_DISPLAY, 'HH:mm') + ' TSI';
+    } else {
+      k15Label = 'Ended';
+      l15Value = Utilities.formatDate(activeSession.sessionEnd, TIMEZONE_DISPLAY, 'HH:mm') + ' TSI';
+    }
+
+    let statusColor;
+    if      (sessionType === 'CURRENT') statusColor = '#00ff00';
+    else if (sessionType === 'NEXT')    statusColor = '#0000ff';
+    else                                statusColor = '#ff0000';
+
+    // K14 is conditional ('Duration' vs 'Total Duration') so stays individual.
+    // K15:K17 and L14:L16 are batched. L14/L16 font colors stay individual (L15 must not be white).
+    dashSheet.getRange('K14').setValue(sessionType === 'CURRENT' ? 'Duration' : 'Total Duration');
+    dashSheet.getRange('K15:K17').setValues([[k15Label], ['Games'], ['Status']]);
+    dashSheet.getRange('L14:L16').setValues([[durationText], [l15Value], [activeSession.games.length]]);
+    dashSheet.getRange('L14').setFontColor('#FFFFFF');
+    dashSheet.getRange('L16').setFontColor('#FFFFFF');
+    dashSheet.getRange('L17').setValue(sessionType).setBackground(statusColor);
+
+  } else {
+    // Batch writes; L17.setBackground resets any status color from the prior sync cycle.
+    dashSheet.getRange('K14:K17').setValues([['Duration'], [''], ['Games'], ['Status']]);
+    dashSheet.getRange('L14:L17').setValues([['--'], ['--'], ['--'], ['--']]);
+    dashSheet.getRange('L14').setFontColor('#FFFFFF');
+    dashSheet.getRange('L16').setFontColor('#FFFFFF');
+    dashSheet.getRange('L17').setBackground('#34495e');
+  }
+}
+
+// OPTIMISED: added soccerBasePrice param; removed internal getSoccerBasePrice + calculateSessionStats.
+function updateAverageSessionDuration(dashSheet, allSessions, soccerBasePrice) {
+  const now          = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear  = now.getFullYear();
+
+  const monthSessions = allSessions.filter(session =>
+    session.sessionStart.getMonth() === currentMonth &&
+    session.sessionStart.getFullYear() === currentYear
+  );
+
+  if (monthSessions.length > 0) {
+    let totalDuration = 0;
+    monthSessions.forEach(session => {
+      // durationHours already pre-calculated in loadAllData.
+      totalDuration += session.durationHours;
+    });
+    dashSheet.getRange('G3').setValue((totalDuration / monthSessions.length).toFixed(2) + 'h');
+  } else {
+    dashSheet.getRange('G3').setValue('--');
+  }
+}
+
+// OPTIMISED: filters sharedData.coveredSessions by date — no groupIntoSessions or calculateSessionStats.
+// Safe: sessions never span midnight in this domain (2-3h games, 6h gap threshold).
+function updateEarningsVelocity(dashSheet, sharedData) {
+  const now       = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+
+  const currentMonth = now.getMonth();
+  const currentYear  = now.getFullYear();
+
+  const { coveredSessions } = sharedData;
+
+  const yesterdaySessions = coveredSessions.filter(session => {
+    const d = new Date(session.sessionStart);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === yesterday.getTime();
+  });
+
+  let yesterdayTotalEarnings = 0;
+  yesterdaySessions.forEach(session => { yesterdayTotalEarnings += session.earnings; });
+  const yesterdayAvgSession = yesterdaySessions.length > 0
+    ? yesterdayTotalEarnings / yesterdaySessions.length : 0;
+
+  const monthSessions = coveredSessions.filter(session =>
+    session.sessionStart.getMonth() === currentMonth &&
+    session.sessionStart.getFullYear() === currentYear
+  );
+
+  let monthTotalEarnings = 0;
+  monthSessions.forEach(session => { monthTotalEarnings += session.earnings; });
+  const monthAvgSession = monthSessions.length > 0
+    ? monthTotalEarnings / monthSessions.length : 0;
+
+  if (monthAvgSession === 0 || yesterdaySessions.length === 0) {
+    dashSheet.getRange('I3').setValue('--');
+    return;
+  }
+
+  const percentChange = ((yesterdayAvgSession - monthAvgSession) / monthAvgSession) * 100;
+  const arrow = percentChange >= 0 ? '↑' : '↓';
+  dashSheet.getRange('I3').setValue(arrow + Math.abs(Math.round(percentChange)) + '%');
+  dashSheet.getRange('I3').setFontColor('#ffffff');
+}
+
+function updateMonthlyProjection(dashSheet, sharedData) {
+  const now          = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear  = now.getFullYear();
+
+  const earningsMatch  = sharedData.monthStatsText.match(/Total Earnings:\s*([\d,]+)\s*₺/);
+  const currentEarnings = earningsMatch ? parseInt(earningsMatch[1].replace(/,/g, ''), 10) : 0;
+
+  const daysInMonth  = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const daysElapsed  = now.getDate();
+  const projectedEarnings = daysElapsed > 0 ? (currentEarnings / daysElapsed) * daysInMonth : 0;
+  const formattedProjection = '₺' + Math.round(projectedEarnings).toLocaleString('tr-TR');
+
+  const props = PropertiesService.getUserProperties();
+  props.setProperty('projectionValue', formattedProjection);
+
+  const isHidden = props.getProperty('projectionHidden') === 'true';
+  if (isHidden) dashSheet.getRange('J3').setValue('₺••••••');
+  else dashSheet.getRange('J3').setValue(formattedProjection);
+}
+
+function toggleProjection() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dashSheet = ss.getSheetByName('Dash');
+  const cell = dashSheet.getRange('J3');
+
+  const props = PropertiesService.getUserProperties();
+  const isHidden = props.getProperty('projectionHidden') === 'true';
+
+  if (isHidden) {
+    const realValue = props.getProperty('projectionValue') || '₺0';
+    cell.setValue(realValue);
+    props.setProperty('projectionHidden', 'false');
+  } else {
+    cell.setValue('₺••••••');
+    props.setProperty('projectionHidden', 'true');
+  }
+}
+
+function initializeProjectionVisibility() {
+  const props = PropertiesService.getUserProperties();
+  props.setProperty('projectionHidden', 'true');
+  Logger.log('✓ Projection set to hidden by default');
+}
+
+function updateCurrentStreak(dashSheet, sharedData) {
+  const now         = new Date();
+  const coveredGames = sharedData.games.filter(g => g.status === 'Covered');
+
+  const workedDays = new Set();
+  coveredGames.forEach(game => {
+    const gameDate = new Date(game.dateYear, game.dateMonth, game.dateDay);
+    gameDate.setHours(0, 0, 0, 0);
+    workedDays.add(gameDate.toDateString());
+  });
+
+  let currentStreak = 0;
+  let checkDate = new Date(now);
+  checkDate.setHours(0, 0, 0, 0);
+
+  const todayKey = checkDate.toDateString();
+  if (!workedDays.has(todayKey)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (true) {
+    const dayKey = checkDate.toDateString();
+    if (workedDays.has(dayKey)) {
+      currentStreak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  dashSheet.getRange('K3').setValue(currentStreak > 0 ? (currentStreak + '🔥') : '0');
+}
+
+// OPTIMISED: filters sharedData.coveredSessions by 30-day window — no groupIntoSessions or calculateSessionStats.
+function updateWeekLoad(dashSheet, sharedData) {
+  const now = new Date();
+  const { coveredSessions } = sharedData;
+
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+  const recentSessions = coveredSessions.filter(session =>
+    session.sessionStart >= thirtyDaysAgo && session.sessionStart <= now
+  );
+
+  const dayHoursMap = {};
+  recentSessions.forEach(session => {
+    const sessionDate = new Date(session.sessionStart);
+    sessionDate.setHours(0, 0, 0, 0);
+    const dayKey = sessionDate.toDateString();
+    if (!dayHoursMap[dayKey]) dayHoursMap[dayKey] = 0;
+    dayHoursMap[dayKey] += session.durationHours;
+  });
+
+  let currentFatigue = 0;
+  const maxFatigue   = 100;
+
+  for (let dayOffset = -30; dayOffset <= 0; dayOffset++) {
+    const checkDate = new Date(now);
+    checkDate.setDate(now.getDate() + dayOffset);
+    checkDate.setHours(0, 0, 0, 0);
+
+    const dayHours = dayHoursMap[checkDate.toDateString()] || 0;
+
+    if (dayHours > 0) {
+      let fatigueGain = 8;
+      if      (dayHours >= 14) fatigueGain = 14;
+      else if (dayHours >= 10) fatigueGain = 12;
+      else if (dayHours >= 6)  fatigueGain = 10;
+      currentFatigue = Math.min(maxFatigue, currentFatigue + fatigueGain);
+    } else {
+      currentFatigue = Math.max(0, currentFatigue - 50);
+    }
+  }
+
+  const fatiguePercent = Math.round(currentFatigue);
+  dashSheet.getRange('L3').setValue(fatiguePercent + '%');
+
+  let color = '#00ff00';
+  if      (fatiguePercent > 70) color = '#F7A399';
+  else if (fatiguePercent > 50) color = '#FBC3BC';
+  else if (fatiguePercent > 30) color = '#FFE3E0';
+
+  dashSheet.getRange('L3').setFontColor(color);
+}
+
+function calculateSessionIdleTime(session) {
+  let totalIdleMs = 0;
+  const sortedGames = session.games.slice().sort((a, b) => a.gameTime - b.gameTime);
+
+  for (let i = 0; i < sortedGames.length - 1; i++) {
+    const gapMs = sortedGames[i + 1].gameTime - sortedGames[i].gameEnd;
+    if (gapMs > 0) totalIdleMs += gapMs;
+  }
+
+  return totalIdleMs / (60 * 60 * 1000);
+}
+
+// OPTIMISED: uses sharedData.allSessions — no groupIntoSessions or calculateSessionStats.
+function updateIdleTimeStats(dashSheet, sharedData) {
+  const now          = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear  = now.getFullYear();
+
+  const { allSessions } = sharedData;
+
+  const monthSessions = allSessions.filter(session =>
+    session.sessionStart.getMonth() === currentMonth &&
+    session.sessionStart.getFullYear() === currentYear
+  );
+
+  if (monthSessions.length === 0) {
+    dashSheet.getRange('M3').setValue('--');
+    dashSheet.getRange('N3').setValue('--');
+    return;
+  }
+
+  let totalIdle     = 0;
+  let totalDuration = 0;
+
+  monthSessions.forEach(session => {
+    totalIdle     += calculateSessionIdleTime(session);
+    totalDuration += session.durationHours; // pre-calculated
+  });
+
+  const avgIdlePerSession = totalIdle / monthSessions.length;
+  const overallEfficiency = totalDuration > 0
+    ? ((totalDuration - totalIdle) / totalDuration) * 100 : 0;
+
+  dashSheet.getRange('M3').setValue(avgIdlePerSession.toFixed(1) + 'h avg\n' + totalIdle.toFixed(1) + 'h total');
+  dashSheet.getRange('N3').setValue(Math.round(overallEfficiency) + '%');
+}
+
