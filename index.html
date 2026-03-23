@@ -1150,6 +1150,388 @@
 
 
       <!-- ─────────────────────────────────────
+           DASHBOARD REHBERİ
+      ───────────────────────────────────── -->
+      <div id="dashboard-rehberi" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+
+        <!-- Header -->
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800">
+          <div class="text-3xl">📊</div>
+          <div>
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Tüm Metriklerin Açıklaması</div>
+            <h2 class="text-xl font-bold text-white">Dashboard Rehberi</h2>
+            <p class="text-slate-400 text-xs mt-1">Her hücrenin ne gösterdiği ve nasıl hesaplandığı</p>
+          </div>
+        </div>
+
+        <div class="p-6 space-y-8">
+
+          <!-- ── Temel Metrikler (Row 3) ── -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span class="w-5 h-px bg-slate-300 inline-block"></span>
+              Ana Metrik Satırı (Row 3)
+              <span class="flex-1 h-px bg-slate-300 inline-block"></span>
+            </h3>
+            <div class="grid grid-cols-1 gap-3">
+
+              <!-- Total Earnings -->
+              <div class="flex gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">A3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Toplam Kazanç</span>
+                    <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">₺ cinsinden</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Bu ayın tüm <strong>Covered</strong> ve <strong>Removed</strong> statüsündeki oyunlardan elde edilen toplam kazanç. Hist sayfasındaki ay başlığı formülünden okunur — bu yüzden manuel eklenen backup oyunlar da dahildir.
+                  </p>
+                  <div class="mt-2 flex items-center gap-2">
+                    <code class="text-xs bg-slate-900 text-emerald-400 px-2 py-1 rounded font-mono">SUMIFS(K:K, L:L, "Covered") + SUMIFS(K:K, L:L, "Removed")</code>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">💡 Hücreye tıklanarak gizlenebilir / gösterilebilir (<code class="bg-slate-100 px-1 rounded text-indigo-700">toggleEarnings</code>).</p>
+                </div>
+              </div>
+
+              <!-- Work Units -->
+              <div class="flex gap-4 p-4 rounded-xl bg-violet-50 border border-violet-200">
+                <div class="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">C3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Work Units (İş Birimi)</span>
+                    <span class="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">0.25 adımlarla</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Kazancın, futbol maçının taban fiyatına oranı. <strong>1 WU = 1 futbol maçı fiyatı kadar kazanç.</strong> Her spor fiyatı 0.25 WU katı olarak tasarlanmıştır — bu sayede float hatalarını önlemek için en yakın 0.25'e yuvarlanır.
+                  </p>
+                  <div class="mt-2">
+                    <code class="text-xs bg-slate-900 text-amber-400 px-2 py-1 rounded font-mono block">ROUND((Kazanç ÷ SoccerBasePrice) × 4) ÷ 4</code>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">📌 SoccerBasePrice, SET sayfasındaki kullanıcı kategorisinden (B50 hücresi) otomatik alınır.</p>
+                </div>
+              </div>
+
+              <!-- Games Assigned / Covered -->
+              <div class="flex gap-4 p-4 rounded-xl bg-sky-50 border border-sky-200">
+                <div class="w-10 h-10 rounded-xl bg-sky-600 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">E3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Atanan / Tamamlanan Maç</span>
+                    <span class="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-medium">örn. 24/18</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Sol taraf bu ay Hist'teki toplam maç sayısı, sağ taraf <strong>Covered + Removed</strong> olanların sayısı. F3 hücresi bunun yüzdesini gösterir.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Avg Session Duration -->
+              <div class="flex gap-4 p-4 rounded-xl bg-orange-50 border border-orange-200">
+                <div class="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">G3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Ortalama Seans Süresi</span>
+                    <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">bu ay</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Bu ayki tüm seans sürelerinin ortalaması (saat cinsinden). Bir seans birden fazla maç içerebilir — bkz. Seans Mantığı.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Earnings Velocity -->
+              <div class="flex gap-4 p-4 rounded-xl bg-pink-50 border border-pink-200">
+                <div class="w-10 h-10 rounded-xl bg-pink-600 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">I3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Kazanç Hızı (Velocity)</span>
+                    <span class="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full font-medium">↑↓ %</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Dünkü ortalama seans kazancının, bu ayki ortalamaya göre ne kadar farklı olduğunu gösterir.
+                    <strong>↑20%</strong> → dün normalden %20 daha iyi, <strong>↓15%</strong> → daha düşük.
+                  </p>
+                  <div class="mt-2">
+                    <code class="text-xs bg-slate-900 text-pink-400 px-2 py-1 rounded font-mono block">((Dünkü Ort. − Aylık Ort.) ÷ Aylık Ort.) × 100</code>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">Dün hiç seans olmadıysa <strong>--</strong> gösterir.</p>
+                </div>
+              </div>
+
+              <!-- Monthly Projection -->
+              <div class="flex gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">J3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Aylık Projeksiyon</span>
+                    <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">doğrusal tahmin</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Ay sonuna kadar gidersen ne kadar kazanacağını hesaplar. Bugüne kadarki günlük ortalamayı ayın tamamına uzatır.
+                  </p>
+                  <div class="mt-2">
+                    <code class="text-xs bg-slate-900 text-indigo-400 px-2 py-1 rounded font-mono block">(Kazanç ÷ GeçenGün) × AydakiToplamGün</code>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">💡 Gizlenebilir / gösterilebilir (<code class="bg-slate-100 px-1 rounded text-indigo-700">toggleProjection</code>).</p>
+                </div>
+              </div>
+
+              <!-- Streak -->
+              <div class="flex gap-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">K3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Güncel Seri 🔥</span>
+                    <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">art arda gün</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Covered statüsündeki maçlarla kaç gün üst üste çalışıldığını gösterir. Bugün henüz maç yoksa dün de sayılmaya başlar. Bir gün boşluk serisi sıfırlar.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Week Load / Fatigue -->
+              <div class="flex gap-4 p-4 rounded-xl bg-red-50 border border-red-200">
+                <div class="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center text-white font-mono font-bold text-sm flex-shrink-0">L3</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-bold text-slate-900 text-sm">Yorgunluk Skoru</span>
+                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">son 30 gün</span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Çalışma yoğunluğunu simüle eden kümülatif bir birikim modeli. Çalışılan günler yorgunluğu artırır, dinlenilen günler hızla düşürür.
+                  </p>
+                  <div class="mt-2 bg-white rounded-lg border border-red-200 p-3 space-y-1">
+                    <div class="flex justify-between text-xs">
+                      <span class="text-slate-600">Çalışma günü (≥14 saat)</span>
+                      <span class="font-bold text-red-600">+14</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                      <span class="text-slate-600">Çalışma günü (10–14 saat)</span>
+                      <span class="font-bold text-orange-600">+12</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                      <span class="text-slate-600">Çalışma günü (6–10 saat)</span>
+                      <span class="font-bold text-amber-600">+10</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                      <span class="text-slate-600">Çalışma günü (normal)</span>
+                      <span class="font-bold text-yellow-600">+8</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                      <span class="text-slate-600">Dinlenme günü</span>
+                      <span class="font-bold text-emerald-600">−50</span>
+                    </div>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">Renk: yeşil = dinlenmiş, pembe = yorgun, kırmızı = aşırı yüklenmiş (%70+).</p>
+                </div>
+              </div>
+
+              <!-- Idle Time & Efficiency -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div class="w-10 h-10 rounded-xl bg-slate-600 flex items-center justify-center text-white font-mono font-bold text-xs flex-shrink-0">M3</div>
+                  <div>
+                    <div class="font-bold text-slate-900 text-sm mb-1">Boş Süre</div>
+                    <p class="text-xs text-slate-600 leading-relaxed">Bir seanstaki maçlar arasındaki bekleme sürelerinin ortalaması + aylık toplamı.</p>
+                  </div>
+                </div>
+                <div class="flex gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div class="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-white font-mono font-bold text-xs flex-shrink-0">N3</div>
+                  <div>
+                    <div class="font-bold text-slate-900 text-sm mb-1">Verimlilik %</div>
+                    <p class="text-xs text-slate-600 leading-relaxed">Aktif çalışma süresi ÷ toplam seans süresi. Yüksek = az bekleme.</p>
+                    <code class="text-xs bg-slate-900 text-green-400 px-2 py-0.5 rounded font-mono mt-1 block">(süre − boşluk) ÷ süre × 100</code>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Seans Mantığı ── -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span class="w-5 h-px bg-slate-300 inline-block"></span>
+              Seans Mantığı
+              <span class="flex-1 h-px bg-slate-300 inline-block"></span>
+            </h3>
+
+            <div class="bg-slate-900 rounded-xl p-5 space-y-4 text-white">
+              <p class="text-sm text-slate-300 leading-relaxed">
+                Script, maçları otomatik olarak <strong class="text-white">seanslara</strong> gruplar. Birden fazla maç arasındaki boşluk <strong class="text-amber-400">≤ 6 saat</strong> ise aynı seans sayılır.
+              </p>
+
+              <!-- Timeline visual -->
+              <div class="bg-slate-800 rounded-lg p-4 font-mono text-xs">
+                <div class="text-slate-400 mb-3">Örnek seans (3 maçlı):</div>
+                <div class="space-y-2">
+                  <div class="flex items-center gap-3">
+                    <span class="text-violet-400 w-12">14:00</span>
+                    <div class="flex-1 bg-violet-900/50 border border-violet-600 rounded px-2 py-1">
+                      <span class="text-violet-300">⏱ Seans Başlar</span>
+                      <span class="text-slate-400 ml-2">← 45dk önce (💻 platform)</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-emerald-400 w-12">14:45</span>
+                    <div class="flex-1 bg-emerald-900/50 border border-emerald-600 rounded px-2 py-1 text-emerald-300">⚽ Maç 1 Başlar → 16:45 biter</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-emerald-400 w-12">17:00</span>
+                    <div class="flex-1 bg-emerald-900/50 border border-emerald-600 rounded px-2 py-1 text-emerald-300">🏀 Maç 2 Başlar → 19:00 biter</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-emerald-400 w-12">20:30</span>
+                    <div class="flex-1 bg-emerald-900/50 border border-emerald-600 rounded px-2 py-1 text-emerald-300">⚽ Maç 3 Başlar → 22:30 biter</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-red-400 w-12">22:30</span>
+                    <div class="flex-1 bg-red-900/50 border border-red-600 rounded px-2 py-1 text-red-300">🔚 Seans Biter → Toplam 8.5 saat</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-3 text-center text-xs">
+                <div class="bg-slate-800 rounded-lg p-3">
+                  <div class="text-slate-400 mb-1">Platform offseti</div>
+                  <div class="text-white font-bold">💻 📞 → −45dk</div>
+                  <div class="text-white font-bold">📱 → −30dk</div>
+                </div>
+                <div class="bg-slate-800 rounded-lg p-3">
+                  <div class="text-slate-400 mb-1">Seans eşiği</div>
+                  <div class="text-amber-400 font-bold text-base">≤ 6 saat</div>
+                  <div class="text-slate-400">maçlar arası boşluk</div>
+                </div>
+                <div class="bg-slate-800 rounded-lg p-3">
+                  <div class="text-slate-400 mb-1">Oyun süresi</div>
+                  <div class="text-white font-bold">Spor türüne göre</div>
+                  <div class="text-slate-400">SET'ten okunur</div>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-700 pt-4 space-y-2">
+                <div class="flex items-center gap-3 text-sm">
+                  <div class="w-3 h-3 rounded bg-blue-500 flex-shrink-0"></div>
+                  <span class="text-slate-300"><strong class="text-white">CURRENT</strong> — Şu an içinde bulunulan seans (zamansal olarak)</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                  <div class="w-3 h-3 rounded bg-blue-800 flex-shrink-0"></div>
+                  <span class="text-slate-300"><strong class="text-white">NEXT</strong> — Henüz başlamamış, sadece Pending maçlardan oluşan sonraki seans</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                  <div class="w-3 h-3 rounded bg-red-600 flex-shrink-0"></div>
+                  <span class="text-slate-300"><strong class="text-white">LAST</strong> — Biten, yalnızca Covered maçlardan hesaplanan en son seans</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Seans İstatistik Paneli ── -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span class="w-5 h-px bg-slate-300 inline-block"></span>
+              Seans İstatistik Paneli (Sağ Blok)
+              <span class="flex-1 h-px bg-slate-300 inline-block"></span>
+            </h3>
+            <div class="space-y-3">
+
+              <div class="grid grid-cols-3 gap-2">
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 text-center">
+                  <div class="text-xs text-slate-400 font-mono mb-1">L7 / M7 / N7</div>
+                  <div class="font-bold text-slate-900 text-sm">₺ Kazanç</div>
+                  <div class="text-xs text-slate-500 mt-1">Her seans için ayrı</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 text-center">
+                  <div class="text-xs text-slate-400 font-mono mb-1">L8 / M8 / N8</div>
+                  <div class="font-bold text-slate-900 text-sm">Work Units</div>
+                  <div class="text-xs text-slate-500 mt-1">0.0u formatında</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 text-center">
+                  <div class="text-xs text-slate-400 font-mono mb-1">L9 / M9 / N9</div>
+                  <div class="font-bold text-slate-900 text-sm">Boş Süre</div>
+                  <div class="text-xs text-slate-500 mt-1">Seans içi bekleme</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-200 text-center">
+                  <div class="text-xs text-emerald-600 font-mono mb-1">L10</div>
+                  <div class="font-bold text-slate-900 text-sm">En İyi Seans ₺</div>
+                  <div class="text-xs text-slate-500 mt-1">Bu ayki en yüksek kazanç</div>
+                </div>
+                <div class="bg-sky-50 rounded-xl p-3 border border-sky-200 text-center">
+                  <div class="text-xs text-sky-600 font-mono mb-1">L11</div>
+                  <div class="font-bold text-slate-900 text-sm">Toplam Seans</div>
+                  <div class="text-xs text-slate-500 mt-1">Bu ayki seans sayısı</div>
+                </div>
+                <div class="bg-violet-50 rounded-xl p-3 border border-violet-200 text-center">
+                  <div class="text-xs text-violet-600 font-mono mb-1">L12</div>
+                  <div class="font-bold text-slate-900 text-sm">En Uzun Seans</div>
+                  <div class="text-xs text-slate-500 mt-1">Bu ayki en uzun süre</div>
+                </div>
+              </div>
+
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <div class="text-xs font-semibold text-slate-600 mb-2">Seans Detay Bloğu (K14–L17)</div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div><span class="font-mono text-slate-400">K14/L14</span> — <span class="text-slate-700">Süre (CURRENT=geçen süre, diğer=toplam)</span></div>
+                  <div><span class="font-mono text-slate-400">K15/L15</span> — <span class="text-slate-700">Başladı / Başlayacak / Bitti + TSİ saati</span></div>
+                  <div><span class="font-mono text-slate-400">K16/L16</span> — <span class="text-slate-700">Seansttaki maç sayısı</span></div>
+                  <div><span class="font-mono text-slate-400">L17</span> — <span class="text-green-600 font-bold">CURRENT</span> / <span class="text-blue-600 font-bold">NEXT</span> / <span class="text-red-600 font-bold">LAST</span> renk etiketi</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Haftalık Timeline & Spor/Ülke Dağılımı ── -->
+          <div>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span class="w-5 h-px bg-slate-300 inline-block"></span>
+              Görsel Paneller
+              <span class="flex-1 h-px bg-slate-300 inline-block"></span>
+            </h3>
+            <div class="space-y-3">
+
+              <div class="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div class="text-2xl flex-shrink-0">📅</div>
+                <div>
+                  <div class="font-bold text-slate-900 text-sm mb-1">Haftalık Timeline (B6–D12)</div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Pzt–Paz için o günkü toplam seans süresi. <code class="bg-slate-100 px-1 rounded text-slate-700">■■■□□□</code> çubuk, saati temsil eder (her ■ = 30 dk, maksimum 24 kutu = 12 saat).
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div class="text-2xl flex-shrink-0">⚽</div>
+                <div>
+                  <div class="font-bold text-slate-900 text-sm mb-1">Spor Dağılımı (B14–D24)</div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Bu ayki Covered + Pending maçların spor türüne göre yüzde dağılımı. Soccer, Basketball, Tennis ve 9 kategori gösterilir. E-Sport maçları 0.25 ağırlıkla sayılır (çeyrek maç eşdeğeri).
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div class="text-2xl flex-shrink-0">🌍</div>
+                <div>
+                  <div class="font-bold text-slate-900 text-sm mb-1">Ülke Dağılımı (K19–N24)</div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    En çok maç yapılan 6 ülke, bayrak emojisi + bar + yüzde ile gösterilir. Küresel (<code class="bg-slate-100 px-1 rounded text-slate-700">🌍🌎🌏</code>) bayraklar sayıma dahil edilmez.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div><!-- /p-6 -->
+      </div><!-- /dashboard-rehberi -->
+
+
+      <!-- ─────────────────────────────────────
            SORUN GİDERME
       ───────────────────────────────────── -->
       <div id="sorun-giderme" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
