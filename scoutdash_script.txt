@@ -284,6 +284,29 @@ function updateMonthHeaderRanges(histSheet) {
   Logger.log('Month headers updated');
 }
 
+/**
+ * Returns UTC offset in hours for CET/CEST on a given date.
+ * CET (winter) = UTC+1, CEST (summer) = UTC+2
+ * DST starts: last Sunday of March at 02:00 CET
+ * DST ends:   last Sunday of October at 03:00 CEST
+ * @param {number} year  — full year (e.g. 2026)
+ * @param {number} month — 0-indexed (Jan=0 … Dec=11)
+ * @param {number} day   — day of month
+ */
+function getCetCestOffsetHours(year, month, day) {
+  if (month >= 3 && month <= 8) return 2;   // Apr–Sep: always CEST
+  if (month >= 10 || month <= 1) return 1;   // Nov–Feb: always CET
+  if (month === 2) {                         // March: CEST from last Sunday
+    const lastSun = 31 - new Date(year, 2, 31).getDay();
+    return day >= lastSun ? 2 : 1;
+  }
+  if (month === 9) {                         // October: CET from last Sunday
+    const lastSun = 31 - new Date(year, 9, 31).getDay();
+    return day >= lastSun ? 1 : 2;
+  }
+  return 1;
+}
+
 function parseMonthString(monthStr) {
   const parts = monthStr.split(' ');
   if (parts.length !== 2) return new Date(0);
@@ -307,8 +330,14 @@ function updateGameStatuses() {
   const setSheet = ss.getSheetByName('SET');
 
   const now = new Date();
-  const cetOffset = 6 * 60 * 60 * 1000;
-  const nowCET = new Date(now.getTime() + cetOffset);
+  // Convert 'now' to CET/CEST local time using IANA timezone — DST-safe.
+  // Utilities.formatDate handles CET↔CEST transitions automatically.
+  // The resulting Date is in the script's project timezone but represents
+  // CET/CEST wall-clock time — matching how gameStart is constructed from
+  // sheet display values below.
+  const nowCetStr = Utilities.formatDate(now, 'Europe/Berlin', 'yyyy/MM/dd/HH/mm');
+  const _cp = nowCetStr.split('/');
+  const nowCET = new Date(+_cp[0], +_cp[1] - 1, +_cp[2], +_cp[3], +_cp[4], 0, 0);
 
   Logger.log('=== STATUS UPDATE START ===');
   Logger.log('Current time CET: ' + nowCET);
@@ -636,7 +665,8 @@ function calculateGameTiming(game, sportDurationMap) {
     String(game.timeHours).padStart(2, '0') + ':' +
     String(game.timeMinutes).padStart(2, '0') + ':00';
 
-  const gameTime = new Date(dateStr + ' GMT+0100');
+  const offsetHours = getCetCestOffsetHours(game.dateYear, game.dateMonth, game.dateDay);
+  const gameTime = new Date(dateStr + ' GMT+0' + offsetHours + '00');
 
   game.gameTime     = gameTime;
   game.sessionStart = new Date(gameTime.getTime() - (offsetMinutes * 60 * 1000));
