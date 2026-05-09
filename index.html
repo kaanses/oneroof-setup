@@ -1091,9 +1091,77 @@
 
 
       <!-- ─────────────────────────────────────
-           ADIM 12: HAZIR!
+           ADIM 12: LIVE KOŞULLU BİÇİMLENDİRME DÜZELTMESİ
       ───────────────────────────────────── -->
-      <div id="step-12" class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden text-white"
+      <div id="step-12" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+           data-aos="fade-up" data-aos-duration="500">
+        <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+          <div class="step-num bg-orange-100 text-orange-600">12</div>
+          <div class="flex-1">
+            <div class="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-1">Zorunlu Düzeltme</div>
+            <h2 class="text-xl font-bold text-slate-900">LIVE Sayfası — Koşullu Biçimlendirme Düzeltmesi</h2>
+          </div>
+          <button @click="toggle(11)"
+                  class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
+                  :class="checkedSteps[11]
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'">
+            <span x-text="checkedSteps[11] ? '✓ Tamam' : 'Tamam'"></span>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="flex gap-3 bg-orange-50 border border-orange-200 rounded-xl p-4">
+            <span class="text-xl flex-shrink-0">⚠️</span>
+            <div>
+              <div class="font-semibold text-orange-800 text-sm">Bu adım zorunludur</div>
+              <div class="text-orange-700 text-xs mt-1 leading-relaxed">
+                İçe aktarılan .xlsx dosyasında koşullu biçimlendirme aralıkları bozuk gelebilir.
+                Bu, satır renklerinin ve görsel kuralların düzgün çalışmamasına neden olur.
+                Aşağıdaki adımları takip ederek düzeltebilirsin.
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
+              <p class="text-slate-700 text-sm"><strong>LIVE</strong> sayfasına git.</p>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
+              <p class="text-slate-700 text-sm">Sol üst köşedeki <strong>kare butona</strong> (satır ve sütun başlıklarının kesiştiği yer) tıklayarak <strong>tüm hücreleri seç</strong>.</p>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</div>
+              <p class="text-slate-700 text-sm">Herhangi bir <strong>satır numarasına</strong> sağ tıkla ve açılan menüden <strong>"Koşullu biçimlendirme"</strong> <span class="text-slate-400">(İngilizce: "Conditional formatting")</span> seçeneğine tıkla.</p>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</div>
+              <p class="text-slate-700 text-sm">Açılan panelde <strong>her bir kuralı</strong> tek tek tıkla.</p>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">5</div>
+              <div class="text-slate-700 text-sm">
+                <p>Her kuralda <strong>"Aralığa uygula"</strong> <span class="text-slate-400">(İngilizce: "Apply to range")</span> alanını bul ve mevcut değeri silip aşağıdaki değeri yapıştır:</p>
+                <div class="code-block mt-2 select-all cursor-pointer" title="Kopyalamak için tıkla">
+                  B1:L1,A3:A108,B3:B83,C3:C81,D3:D83,E3:E309,F3:L83
+                </div>
+                <p class="text-xs text-slate-400 mt-1">💡 Tüm kurallar için aynı aralık değerini kullan.</p>
+              </div>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">6</div>
+              <p class="text-slate-700 text-sm"><strong>"Bitti"</strong> / <strong>"Done"</strong> butonuna tıklayarak kaydet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ─────────────────────────────────────
+           ADIM 13: HAZIR!
+      ───────────────────────────────────── -->
+      <div id="step-13" class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden text-white"
            data-aos="fade-up" data-aos-duration="500">
         <div class="flex items-start gap-4 p-6 border-b border-white/20">
           <div class="step-num bg-white/20 text-white">🎉</div>
@@ -1101,12 +1169,12 @@
             <div class="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-1">Tamamlandı</div>
             <h2 class="text-xl font-bold">Hazırsın!</h2>
           </div>
-          <button @click="toggle(11)"
+          <button @click="toggle(12)"
                   class="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-all"
-                  :class="checkedSteps[11]
+                  :class="checkedSteps[12]
                     ? 'bg-white text-emerald-700 border-white font-bold'
                     : 'bg-white/20 border-white/40 text-white hover:bg-white/30'">
-            <span x-text="checkedSteps[11] ? '✓ Tamamlandı!' : 'Tamamlandı'"></span>
+            <span x-text="checkedSteps[12] ? '✓ Tamamlandı!' : 'Tamamlandı'"></span>
           </button>
         </div>
         <div class="p-6 space-y-4">
@@ -1662,10 +1730,11 @@
           { nav: 'İzinleri Ver' },
           { nav: 'syncAll Çalıştır' },
           { nav: 'Butonlara Script Ata' },
+          { nav: 'LIVE Biçimlendirme' },
           { nav: 'Hazırsın! 🎉' }
         ],
         checkedSteps: JSON.parse(localStorage.getItem('scoutdash_steps') || 'null')
-                      || Array(12).fill(false),
+                      || Array(13).fill(false),
         get totalSteps() { return this.steps.length; },
         get completedSteps() { return this.checkedSteps.filter(Boolean).length; },
         get progress() {
