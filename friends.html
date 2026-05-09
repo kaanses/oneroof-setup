@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScoutDash — Arkadaş Maçları Sayfası</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+          colors: {
+            brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    html { scroll-behavior: smooth; }
+    .code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'Fira Mono', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-x: auto;
+      margin: 12px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .step-num {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 font-sans antialiased">
+
+  <!-- ── Hero ── -->
+  <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white">
+    <div class="max-w-2xl mx-auto px-6 py-16 md:py-20">
+      <a href="index.html" class="inline-flex items-center gap-1.5 text-slate-400 hover:text-white text-xs font-medium mb-6 transition-colors">
+        ← Kurulum Kılavuzuna Dön
+      </a>
+      <div class="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 uppercase tracking-wider">
+        <span>👥</span> Ek Özellik
+      </div>
+      <h1 class="text-4xl md:text-5xl font-black mb-4 leading-tight">
+        Arkadaş Maçları<br>
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          Sorgu Sayfası
+        </span>
+      </h1>
+      <p class="text-slate-300 text-base leading-relaxed max-w-lg">
+        Scout Game veritabanından arkadaşlarının maçlarını çeken ayrı bir sayfa oluştur.
+        İsimleri virgülle yaz, formül gerisini halletsin.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Steps ── -->
+  <div class="max-w-2xl mx-auto px-4 md:px-6 py-10 space-y-6">
+
+    <!-- ADIM 1: Yeni Sayfa Oluştur -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+         data-aos="fade-up" data-aos-duration="500">
+      <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+        <div class="step-num bg-purple-100 text-purple-600">1</div>
+        <div class="flex-1">
+          <div class="text-xs font-semibold text-purple-500 uppercase tracking-wider mb-1">Yeni Sayfa</div>
+          <h2 class="text-xl font-bold text-slate-900">Yeni Bir Sayfa (Sheet) Oluştur</h2>
+        </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="space-y-3">
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
+            <p class="text-slate-700 text-sm">Google Sheets'te alt kısımdaki <strong>+</strong> butonuna tıklayarak yeni bir sayfa ekle.</p>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
+            <p class="text-slate-700 text-sm">Sayfanın adını <strong>Friends</strong> veya <strong>Arkadaşlar</strong> olarak değiştir.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADIM 2: İsimleri Yaz -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+         data-aos="fade-up" data-aos-duration="500">
+      <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+        <div class="step-num bg-pink-100 text-pink-600">2</div>
+        <div class="flex-1">
+          <div class="text-xs font-semibold text-pink-500 uppercase tracking-wider mb-1">İsimler</div>
+          <h2 class="text-xl font-bold text-slate-900">A1 Hücresine İsimleri Yaz</h2>
+        </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-slate-600 text-sm">
+          <strong>A1</strong> hücresine, maçlarını görmek istediğin scout isimlerini <strong>virgülle ayırarak</strong> yaz.
+        </p>
+        <div class="code-block">Kaan,Ali,Mehmet,Ayşe</div>
+        <div class="flex gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <span class="text-xl flex-shrink-0">💡</span>
+          <div class="text-blue-700 text-xs leading-relaxed">
+            İsimler, Scout Game v6 sayfasındaki <strong>O sütunuyla</strong> (scout adı) eşleşecek.
+            Büyük/küçük harf duyarlıdır — tam olarak orada yazıldığı gibi yaz.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADIM 3: Formülü Yapıştır -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+         data-aos="fade-up" data-aos-duration="500">
+      <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+        <div class="step-num bg-indigo-100 text-indigo-600">3</div>
+        <div class="flex-1">
+          <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Formül</div>
+          <h2 class="text-xl font-bold text-slate-900">A3 Hücresine Formülü Yapıştır</h2>
+        </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-slate-600 text-sm">
+          Aşağıdaki formülü <strong>A3</strong> hücresine yapıştır. Bu formül, A1'deki tüm isimlere ait maçları otomatik olarak çekecek.
+        </p>
+        <div class="code-block select-all cursor-pointer" title="Kopyalamak için tıkla">=QUERY(
+  FILTER(
+    IMPORTRANGE(
+      "1D-0aNDuuH_Td5DsoWXy9QPdmrgjYy9ZH4OyzK3P8BEc",
+      "Scout Game v6!A2:S4000"
+    ),
+    REGEXMATCH(
+      IMPORTRANGE(
+        "1D-0aNDuuH_Td5DsoWXy9QPdmrgjYy9ZH4OyzK3P8BEc",
+        "Scout Game v6!O2:O4000"
+      ),
+      TEXTJOIN("|", TRUE, ARRAYFORMULA(TRIM(SPLIT(A1, ","))))
+    )
+  ),
+  "SELECT Col1,Col2,Col3,Col4,Col5,Col6,Col7,Col8,Col9,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19
+   ORDER BY Col4,Col3,Col2,Col6,Col7",
+  0
+)</div>
+
+        <div class="flex gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <span class="text-xl flex-shrink-0">⚠️</span>
+          <div class="text-amber-700 text-xs leading-relaxed">
+            <strong>İlk kullanımda</strong> Google Sheets, IMPORTRANGE için erişim izni isteyecektir.
+            <strong>"Erişime izin ver"</strong> (Allow access) butonuna tıkla. Bu izin sadece bir kez gerekir.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nasıl Çalışır -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+         data-aos="fade-up" data-aos-duration="500">
+      <div class="flex items-start gap-4 p-6 border-b border-slate-100">
+        <div class="step-num bg-slate-100 text-slate-600">?</div>
+        <div class="flex-1">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Bilgi</div>
+          <h2 class="text-xl font-bold text-slate-900">Nasıl Çalışır?</h2>
+        </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="space-y-3">
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
+            <p class="text-slate-700 text-sm"><strong>SPLIT(A1, ",")</strong> — A1'deki virgülle ayrılmış isimleri ayrı hücrelere böler.</p>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
+            <p class="text-slate-700 text-sm"><strong>TEXTJOIN("|", ...)</strong> — İsimleri regex OR kalıbına çevirir: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">Kaan|Ali|Mehmet</code></p>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</div>
+            <p class="text-slate-700 text-sm"><strong>REGEXMATCH</strong> — O sütunundaki (scout adı) her satırı bu kalıpla eşleştirir.</p>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</div>
+            <p class="text-slate-700 text-sm"><strong>FILTER</strong> — Sadece eşleşen satırları getirir.</p>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">5</div>
+            <p class="text-slate-700 text-sm"><strong>QUERY ... ORDER BY</strong> — Sonuçları tarih, saat ve maç bilgilerine göre sıralar.</p>
+          </div>
+        </div>
+
+        <div class="flex gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-4">
+          <span class="text-xl flex-shrink-0">✅</span>
+          <div class="text-emerald-700 text-xs leading-relaxed">
+            A1'deki isimleri değiştirdiğinde sonuçlar otomatik güncellenir — ekstra bir şey yapmana gerek yok.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Footer ── -->
+  <div class="max-w-2xl mx-auto px-6 pb-16 text-center">
+    <a href="index.html" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">
+      ← Kurulum Kılavuzuna Dön
+    </a>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      AOS.init({ duration: 550, once: true, offset: 60, easing: 'ease-out-quad' });
+    });
+  </script>
+
+</body>
+</html>
